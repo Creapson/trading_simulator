@@ -1,17 +1,14 @@
-from dataclasses import dataclass
-
-
-@dataclass
 class Strategy:
-    _DEPENDENCIES: [str] = []
+    _DEPENDENCIES = []
+
+    def __init__(self):
+        self.name = None
 
     def get_dependencies(self):
         return self._DEPENDENCIES
 
-    def evaluate(self):
-        should_buy = self.is_buy_signal()
-        should_sell = self.is_sell_signal()
-        return should_buy, should_sell
+    def evaluate(self, ind):
+        return self.is_buy_signal(ind), self.is_sell_signal(ind)
 
     def is_buy_signal(self):
         return None
@@ -20,36 +17,46 @@ class Strategy:
         return None
 
 
-@dataclass
 class PriceCrossover_50(Strategy):
-    _DEPENDENCIES: [str] = ["SMA_50"]
-    _CLOSE: float
-    _SMA: float
+    _DEPENDENCIES = ["SMA_50"]
 
-    def evaluate(self):
-        return self.is_buy_signal(), self.is_sell_signal()
+    def __init__(self):
+        self.name = "PriceCrossover_50"
 
-    def is_buy_signal(self):
-        if self.CLOSE is None or self.SMA is None:
+    def is_buy_signal(self, ind):
+        if ind["CLOSE"] is None or ind["SMA_50"] is None:
             return False
         else:
-            return self.CLOSE > self.SMA
+            return ind["CLOSE"] > ind["SMA_50"]
 
-    def is_sell_signal(self):
-        if self.CLOSE is None or self.SMA is None:
+    def is_sell_signal(self, ind):
+        if ind["CLOSE"] is None or ind["SMA_50"] is None:
             return False
         else:
-            return self.CLOSE < self.SMA
+            return ind["CLOSE"] < ind["SMA_50"]
         return None
+
+
+class BuyAndHold(Strategy):
+    _DEPENDENCIES: [] = []
+
+    def __init__(self):
+        self.name = "Buy and Hold"
+
+    def is_buy_signal(self, ind):
+        return True
+
+    def is_sell_signal(self, ind):
+        return False
 
 
 """
 class (Strategy):
-    _DEPENDENCIES: [str] = []
+    _DEPENDENCIES: [] = []
 
-    def is_buy_signal(self):
+    def is_buy_signal(self, ind):
         return False
 
-    def is_sell_signal(self):
-        return false
+    def is_sell_signal(self, ind):
+        return False
 """

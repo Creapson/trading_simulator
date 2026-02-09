@@ -103,11 +103,21 @@ class Ticker:
         self.desc = desc
         self.df = None
 
+        self.is_loaded = False
+
     def load_history(self):
         # try loading_from_file
-        if not self.history_from_file():
-            # if no file found get it from yf
-            self.history_from_yf()
+        self.is_loaded = self.history_from_file()
+
+        if not self.is_loaded:
+            self.is_loaded = self.history_from_yf()
+
+    def get_dataframe(self):
+        return self.df
+
+    def get_available_indicator(self):
+        indicator = self._indicator_registry()
+        return indicator.keys()
 
     def history_from_file(self):
         try:
@@ -143,6 +153,9 @@ class Ticker:
         print(self.df.columns)
 
     def add_indicator(self, indicator: str, force: bool = False):
+        if not self.is_loaded:
+            self.load_history()
+
         indicator = indicator.upper()
         registry = self._indicator_registry()
 
