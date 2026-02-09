@@ -104,6 +104,7 @@ class Ticker:
         self.df = None
 
         self.is_loaded = False
+        self.can_load_ticker = True
 
     def load_history(self):
         # try loading_from_file
@@ -111,6 +112,12 @@ class Ticker:
 
         if not self.is_loaded:
             self.is_loaded = self.history_from_yf()
+
+        if not self.is_loaded:
+            print("Failed to get Data for this Ticker!")
+            self.can_load_ticker = False
+        else:
+            self.can_load_ticker = True
 
     def get_dataframe(self):
         return self.df
@@ -130,15 +137,25 @@ class Ticker:
 
     def history_from_yf(self):
         print("Downloading Ticker from Yahoo-Finance!")
-        self.df = yf.download(self.ticker, period="max", interval="1d")
+        try:
+            self.df = yf.download(self.ticker, period="max", interval="1d")
 
-        # 1️⃣ Flatten columns
-        if isinstance(self.df.columns, pd.MultiIndex):
-            self.df.columns = self.df.columns.get_level_values(0)
+            # Download failed or returned no data
+            if self.df is None or self.df.empty:
+                print("Download failed: no data returned.")
+                return False
 
-        self.df.columns = self.df.columns.str.upper()
-        self.save_to_file()
-        return True
+            # 1️⃣ Flatten columns
+            if isinstance(self.df.columns, pd.MultiIndex):
+                self.df.columns = self.df.columns.get_level_values(0)
+
+            self.df.columns = self.df.columns.str.upper()
+            self.save_to_file()
+            return True
+
+        except Exception as e:
+            print(f"Download failed with error: {e}")
+            return False
 
     def save_to_file(self):
         self.df.to_csv("data/ticker/history/" + self.ticker + ".csv")
@@ -154,6 +171,8 @@ class Ticker:
         print(self.df.columns)
 
     def add_indicator(self, indicator: str, force: bool = False):
+        if not self.can_load_ticker:
+            return False
         if not self.is_loaded:
             self.load_history()
 
@@ -172,12 +191,18 @@ class Ticker:
             try:
                 registry[ind]()
                 print("Calcualted Indicator: ", ind)
+                return True
             except KeyError:
                 raise ValueError(f"No build rule registered for {ind}")
+                return False
+        return False
 
     def add_indicators(self, indicators: list[str], force: bool = False):
         for ind in indicators:
-            self.add_indicator(ind, force=force)
+            succes = self.add_indicator(ind, force=force)
+            if not succes:
+                return False
+        return True
 
     def _indicator_registry(self):
         return {

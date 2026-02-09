@@ -64,7 +64,7 @@ class PriceCrossoverEMA50(Strategy):
 
 
 class BuyAndHold(Strategy):
-    _DEPENDENCIES: [] = []
+    _DEPENDENCIES = []
 
     def __init__(self):
         self.name = "Buy and Hold"
@@ -76,11 +76,11 @@ class BuyAndHold(Strategy):
         return False
 
 
-class GoldenCross(Strategy):
-    _DEPENDENCIES: [] = ["SMA_50", "SMA_200"]
+class GoldenCross200_50(Strategy):
+    _DEPENDENCIES = ["SMA_50", "SMA_200"]
 
     def __init__(self):
-        self.name = "GoldenCross"
+        self.name = "GoldenCross200_50"
 
     def is_buy_signal(self, ind):
         return ind["SMA_50"] > ind["SMA_200"]
@@ -89,9 +89,22 @@ class GoldenCross(Strategy):
         return ind["SMA_50"] < ind["SMA_200"]
 
 
+class GoldenCross200_20(Strategy):
+    _DEPENDENCIES = ["SMA_20", "SMA_200"]
+
+    def __init__(self):
+        self.name = "GoldenCross200_20"
+
+    def is_buy_signal(self, ind):
+        return ind["SMA_20"] > ind["SMA_200"]
+
+    def is_sell_signal(self, ind):
+        return ind["SMA_20"] < ind["SMA_200"]
+
+
 """
 class (Strategy):
-    _DEPENDENCIES: [] = []
+    _DEPENDENCIES = []
 
     def __init__(self):
         self.name = ""    

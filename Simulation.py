@@ -30,10 +30,13 @@ class Simulation:
         for strategy in self.strategys:
             indicators.update(strategy.get_dependencies())
         self.indicator_list = list(indicators)
-        self.ticker.add_indicators(self.indicator_list)
+        self.ticker_loaded = self.ticker.add_indicators(self.indicator_list)
 
     def start(self):
         self.results = []
+        if not self.ticker_loaded:
+            print("Ticker not loaded properly. Cant start Simulation!")
+            return
         for strategy in self.strategys:
             print("Started Simulator for: ", strategy.name)
             result, strat_name = self.simulate(strategy)
@@ -86,7 +89,7 @@ class Simulation:
                 plt.plot(
                     df.index,
                     df[indicator],
-                    label=indicator,
+                    label="Indicator: " + indicator,
                     linewidth=1,
                 )
 
