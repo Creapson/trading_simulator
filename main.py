@@ -1,10 +1,12 @@
-from Simulation import Simluation
-from Strategy import BuyAndHold, PriceCrossover_50
+from Simulation import Simulation
+from Strategy import BuyAndHold, GoldenCross, PriceCrossoverEMA50, PriceCrossoverSMA50
 from Ticker import Ticker
 
-strats = (BuyAndHold(), PriceCrossover_50())
-sim = Simluation(ticker=Ticker("TSLA"), strategys=strats)
+strats = []
+strats.append(BuyAndHold())
+strats.append(PriceCrossoverSMA50())
+strats.append(PriceCrossoverEMA50())
+strats.append(GoldenCross())
+sim = Simulation(ticker=Ticker("DTE.DE"), strategys=strats)
 sim.start()
-sim.plot_results()
-
-print("finished simulating")
+sim.plot_results(show_indicators=True)

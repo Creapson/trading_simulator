@@ -6,30 +6,31 @@ from Strategy import Strategy
 from Ticker import Ticker
 
 
-class Simluation:
+class Simulation:
     def __init__(
         self,
         strategys: [Strategy] = [],
         ticker: Ticker = None,
         start_date: str = None,
         end_date: str = None,
-        portfolio=Portfolio(cash=10000),
     ):
         self.strategys = strategys
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
-        self.portfolio = portfolio
+        self.portfolio = None
 
         self.results = []
+        self.indicator_list = []
 
         self.calc_indicators()
 
     def calc_indicators(self):
-        indicator_list = []
+        indicators = set()
         for strategy in self.strategys:
-            indicator_list += strategy.get_dependencies()
-        self.ticker.add_indicators(indicator_list)
+            indicators.update(strategy.get_dependencies())
+        self.indicator_list = list(indicators)
+        self.ticker.add_indicators(self.indicator_list)
 
     def start(self):
         self.results = []
@@ -38,10 +39,12 @@ class Simluation:
             self.results.append((result, strat_name))
 
     def simulate(self, strategy):
+        df = self.ticker.get_dataframe()
+        self.portfolio = Portfolio(cash=df["CLOSE"].iloc[0])
         sell_signal = False
         buy_signal = False
         results = []
-        for date, row in self.ticker.get_dataframe().iterrows():
+        for date, row in df.iterrows():
             # handle signals
             if buy_signal:
                 buy_signal = False
@@ -62,12 +65,11 @@ class Simluation:
 
         return pd.DataFrame(results).set_index("Date"), strategy.name
 
-    def plot_results(self):
+    def plot_results(self, show_indicators=False):
         df = self.ticker.get_dataframe()
         plt.figure(figsize=(14, 7))
-        plt.plot(df.index, df["CLOSE"], label=self.ticker.name, linewidth=1)
 
-        # plot each sma
+        # plot simulation results
         for result, strat_name in self.results:
             plt.plot(
                 result.index,
@@ -75,6 +77,20 @@ class Simluation:
                 label=strat_name,
                 linewidth=1,
             )
+
+        print("PLOT_RESULTS FROM:", __file__)
+        print(self.indicator_list)
+        print(show_indicators)
+        if show_indicators:
+            print(self.indicator_list)
+            # plot indicators
+            for indicator in self.indicator_list:
+                plt.plot(
+                    df.index,
+                    df[indicator],
+                    label=indicator,
+                    linewidth=1,
+                )
 
         plt.title("Simulation results")
         plt.xlabel("Date")

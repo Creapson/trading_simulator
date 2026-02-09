@@ -121,13 +121,14 @@ class Ticker:
 
     def history_from_file(self):
         try:
-            self.df = pd.read_csv("data/stocks/history/" + self.ticker + ".csv")
+            self.df = pd.read_csv("data/ticker/history/" + self.ticker + ".csv")
             return True
         except Exception:
             print(f"Filed to read {self.ticker} from file!")
             return False
 
     def history_from_yf(self):
+        print("Downloading Ticker from Yahoo-Finance!")
         self.df = yf.download(self.ticker, period="max", interval="1d")
 
         # 1️⃣ Flatten columns
@@ -136,11 +137,9 @@ class Ticker:
 
         self.df.columns = self.df.columns.str.upper()
         self.save_to_file()
-        self.print_info()
-        # print("Failed to download historical data from Yahoo Finance")
 
     def save_to_file(self):
-        self.df.to_csv("data/stocks/history/" + self.ticker + ".csv")
+        self.df.to_csv("data/ticker/history/" + self.ticker + ".csv")
         print(f"Saved {self.ticker}.csv")
         pass
 
@@ -170,6 +169,7 @@ class Ticker:
 
             try:
                 registry[ind]()
+                print("Calcualted Indicator: ", ind)
             except KeyError:
                 raise ValueError(f"No build rule registered for {ind}")
 
