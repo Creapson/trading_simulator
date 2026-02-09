@@ -35,6 +35,7 @@ class Simulation:
     def start(self):
         self.results = []
         for strategy in self.strategys:
+            print("Started Simulator for: ", strategy.name)
             result, strat_name = self.simulate(strategy)
             self.results.append((result, strat_name))
 
@@ -78,11 +79,8 @@ class Simulation:
                 linewidth=1,
             )
 
-        print("PLOT_RESULTS FROM:", __file__)
-        print(self.indicator_list)
-        print(show_indicators)
+        # plot indicator
         if show_indicators:
-            print(self.indicator_list)
             # plot indicators
             for indicator in self.indicator_list:
                 plt.plot(

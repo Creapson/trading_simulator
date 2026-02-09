@@ -122,6 +122,7 @@ class Ticker:
     def history_from_file(self):
         try:
             self.df = pd.read_csv("data/ticker/history/" + self.ticker + ".csv")
+            print("Loaded Ticker {self.ticker} from file!")
             return True
         except Exception:
             print(f"Filed to read {self.ticker} from file!")
@@ -137,6 +138,7 @@ class Ticker:
 
         self.df.columns = self.df.columns.str.upper()
         self.save_to_file()
+        return True
 
     def save_to_file(self):
         self.df.to_csv("data/ticker/history/" + self.ticker + ".csv")
