@@ -2,6 +2,7 @@ class Portfolio:
     def __init__(self, cash=0, stocks=None):
         self._cash = cash
         self._stocks = stocks or {}
+        self.trade_history = []
 
     def get_stocks(self):
         return self._stocks
@@ -24,7 +25,7 @@ class Portfolio:
             return
 
         symbol = ticker.name
-        open_price = ticker.get_dataframe().loc[date, "OPEN"]
+        open_price = ticker.get_dataframe().loc[date, "CLOSE"]
 
         budget = self._cash * allocation
         num_stocks = budget / open_price  # ← fixed math
@@ -39,8 +40,11 @@ class Portfolio:
         if num_stocks <= 0:
             return
 
-        open_price = ticker.get_dataframe().loc[date, "OPEN"]
+        open_price = ticker.get_dataframe().loc[date, "CLOSE"]
         earnings = num_stocks * open_price
 
         self._cash += earnings
         self._stocks[symbol] = 0
+
+    def add_trade(self, ticker, date, is_long):
+        pass

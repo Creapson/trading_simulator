@@ -89,17 +89,47 @@ class GoldenCross200_50(Strategy):
         return ind["SMA_50"] < ind["SMA_200"]
 
 
-class GoldenCross200_20(Strategy):
-    _DEPENDENCIES = ["SMA_20", "SMA_200"]
+class GoldenCrossSMA200_Dropout(Strategy):
+    _DEPENDENCIES = ["SMA_50", "SMA_200"]
 
     def __init__(self):
-        self.name = "GoldenCross200_20"
+        self.name = "GoldenCrossSMA200_Dropout"
 
     def is_buy_signal(self, ind):
-        return ind["SMA_20"] > ind["SMA_200"]
+        # Golden Cross
+        return ind["SMA_50"] > ind["SMA_200"]
 
     def is_sell_signal(self, ind):
-        return ind["SMA_20"] < ind["SMA_200"]
+        # Death Cross
+        return ind["CLOSE"] < ind["SMA_200"]
+
+
+class GoldenCrossSMA100_Dropout(Strategy):
+    _DEPENDENCIES = ["SMA_50", "SMA_200", "SMA_100"]
+
+    def __init__(self):
+        self.name = "GoldenCrossSMA100_Dropout"
+
+    def is_buy_signal(self, ind):
+        # Golden Cross
+        return ind["SMA_50"] > ind["SMA_200"]
+
+    def is_sell_signal(self, ind):
+        # Death Cross
+        return ind["CLOSE"] < ind["SMA_100"]
+
+
+class Hyterese(Strategy):
+    _DEPENDENCIES = ["SMA_50", "SMA_100"]
+
+    def __init__(self):
+        self.name = "Indiv Crossover"
+
+    def is_buy_signal(self, ind):
+        return ind["CLOSE"] > ind["SMA_50"]
+
+    def is_sell_signal(self, ind):
+        return ind["CLOSE"] < ind["SMA_100"]
 
 
 """

@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from Portfolio import Portfolio
@@ -31,6 +32,7 @@ class Simulation:
             indicators.update(strategy.get_dependencies())
         self.indicator_list = list(indicators)
         self.ticker_loaded = self.ticker.add_indicators(self.indicator_list)
+        # self.ticker.set_timespan(start_time="1929-01-01 00:00")
 
     def start(self):
         self.results = []
@@ -44,11 +46,13 @@ class Simulation:
 
     def simulate(self, strategy):
         df = self.ticker.get_dataframe()
+        df = df.dropna()
         self.portfolio = Portfolio(cash=df["CLOSE"].iloc[0])
         sell_signal = False
         buy_signal = False
         results = []
         for date, row in df.iterrows():
+            buy_signal, sell_signal = strategy.evaluate(row)
             # handle signals
             if buy_signal:
                 buy_signal = False
@@ -59,7 +63,6 @@ class Simulation:
                 self.portfolio.sell_stock(self.ticker, date)
 
             # calculate signal for next day
-            buy_signal, sell_signal = strategy.evaluate(row)
             results.append(
                 {
                     "Date": date,
@@ -69,29 +72,62 @@ class Simulation:
 
         return pd.DataFrame(results).set_index("Date"), strategy.name
 
-    def plot_results(self, show_indicators=False):
+    def plot_results(self, show_indicators=False, log_scale=False):
         df = self.ticker.get_dataframe()
+        df.dropna()
         plt.figure(figsize=(14, 7))
-
-        # plot simulation results
-        for result, strat_name in self.results:
+        if not log_scale:
             plt.plot(
-                result.index,
-                result[strat_name],
-                label=strat_name,
+                df.index,
+                df["CLOSE"],
+                label="Price",
                 linewidth=1,
             )
-
-        # plot indicator
-        if show_indicators:
-            # plot indicators
-            for indicator in self.indicator_list:
+            # plot simulation results
+            for result, strat_name in self.results:
                 plt.plot(
-                    df.index,
-                    df[indicator],
-                    label="Indicator: " + indicator,
+                    result.index,
+                    result[strat_name],
+                    label=strat_name,
                     linewidth=1,
                 )
+
+            # plot indicator
+            if show_indicators:
+                # plot indicators
+                for indicator in self.indicator_list:
+                    plt.plot(
+                        df.index,
+                        df[indicator],
+                        label="Indicator: " + indicator,
+                        linewidth=1,
+                    )
+        else:
+            plt.plot(
+                df.index,
+                np.log10(df["CLOSE"]),
+                label="Price",
+                linewidth=1,
+            )
+            # plot simulation results
+            for result, strat_name in self.results:
+                plt.plot(
+                    result.index,
+                    np.log10(result[strat_name]),
+                    label=strat_name,
+                    linewidth=1,
+                )
+
+            # plot indicator
+            if show_indicators:
+                # plot indicators
+                for indicator in self.indicator_list:
+                    plt.plot(
+                        df.index,
+                        np.log10(df[indicator]),
+                        label="Indicator: " + indicator,
+                        linewidth=1,
+                    )
 
         plt.title("Simulation results")
         plt.xlabel("Date")

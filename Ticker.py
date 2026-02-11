@@ -9,6 +9,7 @@ INDICATOR_DEPENDENCIES = {
     "SMA_5": [],
     "SMA_10": [],
     "SMA_20": [],
+    "SMA_40": [],
     "SMA_50": [],
     "SMA_100": [],
     "SMA_200": [],
@@ -126,19 +127,35 @@ class Ticker:
         indicator = self._indicator_registry()
         return indicator.keys()
 
+    def set_timespan(self, start_time=None, end_time=None):
+        try:
+            if start_time is None and end_time is None:
+                return
+            elif end_time is None:
+                self.df = self.df.loc[start_time:]
+            else:
+                self.df = self.df.loc[:end_time]
+        except Exception:
+            print("Failed to slice Ticker!")
+
     def history_from_file(self):
         try:
-            self.df = pd.read_csv("data/ticker/history/" + self.ticker + ".csv")
-            print("Loaded Ticker {self.ticker} from file!")
+            self.df = pd.read_csv(
+                "data/ticker/history/" + self.ticker + ".csv",
+                parse_dates=["Date"],
+                index_col="Date",
+            )
+            print(f"Loaded Ticker {self.ticker} from file!")
             return True
         except Exception:
-            print(f"Filed to read {self.ticker} from file!")
+            print(f"Failed to read {self.ticker} from file!")
             return False
 
     def history_from_yf(self):
         print("Downloading Ticker from Yahoo-Finance!")
         try:
             self.df = yf.download(self.ticker, period="max", interval="1d")
+            print(self.df)
 
             # Download failed or returned no data
             if self.df is None or self.df.empty:
@@ -150,6 +167,11 @@ class Ticker:
                 self.df.columns = self.df.columns.get_level_values(0)
 
             self.df.columns = self.df.columns.str.upper()
+            print(self.df)
+
+            self.df.index = pd.to_datetime(self.df.index)
+            self.df = self.df.sort_index()
+
             self.save_to_file()
             return True
 
@@ -209,6 +231,7 @@ class Ticker:
             "SMA_5": self.add_sma_5,
             "SMA_10": self.add_sma_10,
             "SMA_20": self.add_sma_20,
+            "SMA_40": self.add_sma_40,
             "SMA_50": self.add_sma_50,
             "SMA_100": self.add_sma_100,
             "SMA_200": self.add_sma_200,
@@ -307,6 +330,9 @@ class Ticker:
 
     def add_sma_20(self):
         self.df["SMA_20"] = self.df["CLOSE"].rolling(window=20).mean()
+
+    def add_sma_40(self):
+        self.df["SMA_40"] = self.df["CLOSE"].rolling(window=40).mean()
 
     def add_sma_50(self):
         self.df["SMA_50"] = self.df["CLOSE"].rolling(window=50).mean()
