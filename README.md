@@ -4,7 +4,7 @@ A Python-based framework for testing financial trading strategies using historic
 
 ---
 
-## ## Core Architecture
+## Core Architecture
 
 
 
@@ -15,12 +15,12 @@ A Python-based framework for testing financial trading strategies using historic
 
 ---
 
-## ## Technical Features
+## Technical Features
 
-### ### Indicator Dependency Resolution
+### Indicator Dependency Resolution
 The engine includes a sophisticated resolution system that automatically calculates parent indicators. For example, requesting `MACD_HIST` will trigger the calculation of `MACD`, `MACD_SIGNAL`, `EMA:12`, and `EMA:26` in the correct order.
 
-### ### Simulation Workflow
+### Simulation Workflow
 1.  **Initialization**: Load historical data for a specific ticker.
 2.  **Indicator Calculation**: Strategies request specific indicators (e.g., `SMA:50`) which are appended to the dataset.
 3.  **Signal Generation**: The simulation iterates through the time series, checking for buy (1) or sell (-1) signals.
@@ -29,7 +29,7 @@ The engine includes a sophisticated resolution system that automatically calcula
 
 ---
 
-## ## Quick Start Example
+## Quick Start Example
 
 ```python
 from Simulation import Simulation
