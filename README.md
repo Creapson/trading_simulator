@@ -20,6 +20,14 @@ A Python-based framework for testing financial trading strategies using historic
 ### Indicator Dependency Resolution
 The engine includes a sophisticated resolution system that automatically calculates parent indicators. For example, requesting `MACD_HIST` will trigger the calculation of `MACD`, `MACD_SIGNAL`, `EMA:12`, and `EMA:26` in the correct order.
 
+## Supported Indicators
+The system supports a wide array of technical tools including:
+
+- Moving Averages: SMA, EMA, WMA, DEMA, TEMA, KAMA.
+- Momentum: RSI, MACD, Stochastic Oscillator, CCI, CMO, ROC.
+- Volatility: ATR, Bollinger Bands, True Range.
+- Trend/Volume: ADX, Aroon, OBV, Chaikin Oscillator.
+
 ### Simulation Workflow
 1.  **Initialization**: Load historical data for a specific ticker.
 2.  **Indicator Calculation**: Strategies request specific indicators (e.g., `SMA:50`) which are appended to the dataset.
@@ -31,14 +39,30 @@ The engine includes a sophisticated resolution system that automatically calcula
 
 ## Quick Start Example
 
+# Creating Custom Strategies
+To create a new strategy, inherit from Strategy and define your logic:
+
+```python
+class MyStrategy(Strategy):
+    def __init__(self):
+        self.name = "MyCustomStrat"
+        self._DEPENDENCIES = ["RSI:14", "SMA:50"]
+
+    def is_buy_signal(self, df):
+        return (df["RSI:14"] < 30) & (df["CLOSE"] > df["SMA:50"])
+
+    def is_sell_signal(self, df):
+        return df["RSI:14"] > 70
+```
+
 ```python
 from Simulation import Simulation
-from Strategy import SMA_Cross
+from Strategy import MyStrategy
 from Ticker import Ticker
 
 # Setup ticker and strategy
 ticker = Ticker("AAPL")
-strategy = SMA_Cross(days_short=50, days_long=200)
+strategy = MyStrategy()
 
 # Run simulation
 sim = Simulation(ticker=ticker, strategys=[strategy])
@@ -46,11 +70,4 @@ sim.start()
 
 # Plot the performance
 sim.plot_results(log_scale=True)
-
-## Supported Indicators
-The system supports a wide array of technical tools including:
-
-- Moving Averages: SMA, EMA, WMA, DEMA, TEMA, KAMA.
-- Momentum: RSI, MACD, Stochastic Oscillator, CCI, CMO, ROC.
-- Volatility: ATR, Bollinger Bands, True Range.
-- Trend/Volume: ADX, Aroon, OBV, Chaikin Oscillator.
+```
