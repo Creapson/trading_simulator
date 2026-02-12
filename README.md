@@ -39,7 +39,7 @@ The system supports a wide array of technical tools including:
 
 ## Quick Start Example
 
-# Creating Custom Strategies
+### Creating Custom Strategies
 To create a new strategy, inherit from Strategy and define your logic:
 
 ```python
@@ -54,7 +54,7 @@ class MyStrategy(Strategy):
     def is_sell_signal(self, df):
         return df["RSI:14"] > 70
 ```
-
+### Setting up the simulation and plotting the result
 ```python
 from Simulation import Simulation
 from Strategy import MyStrategy
