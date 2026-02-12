@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class Strategy:
     _DEPENDENCIES = []
 
@@ -7,14 +10,23 @@ class Strategy:
     def get_dependencies(self):
         return self._DEPENDENCIES
 
-    def evaluate(self, ind):
+    def evaluate(self, df):
         # Check if every dependency is available
         for dependency in self._DEPENDENCIES:
-            if ind.get(dependency) is None:
+            if df.get(dependency) is None:
                 print(f"Missing data for: {dependency}")
                 return False, False
 
-        return self.is_buy_signal(ind), self.is_sell_signal(ind)
+        mask_buy = self.is_buy_signal(df)
+        mask_sell = self.is_sell_signal(df)
+        signals_df = df[mask_buy | mask_sell].copy()
+
+        conditions = [mask_buy[mask_buy | mask_sell], mask_sell[mask_buy | mask_sell]]
+        choices = [1, -1]
+
+        signals_df["signal"] = np.select(conditions, choices)
+
+        return signals_df["signal"]
 
     def is_buy_signal(self):
         return None
@@ -23,113 +35,47 @@ class Strategy:
         return None
 
 
-class PriceCrossoverSMA50(Strategy):
-    _DEPENDENCIES = ["SMA_50"]
+class SMA_Cross(Strategy):
+    def __init__(self, days_short, days_long):
+        if days_short > days_long:
+            tmp = days_long
+            days_long = days_short
+            days_short = tmp
 
-    def __init__(self):
-        self.name = "PriceCrossover with SMA_50"
+        self.name = "SMA_CROSS S:" + str(days_short) + " L:" + str(days_long)
 
-    def is_buy_signal(self, ind):
-        if ind["CLOSE"] is None or ind["SMA_50"] is None:
-            return False
-        else:
-            return ind["CLOSE"] > ind["SMA_50"]
+        self.sma_s = "SMA:" + str(days_short)
+        self.sma_l = "SMA:" + str(days_long)
+        self._DEPENDENCIES.append(self.sma_s)
+        self._DEPENDENCIES.append(self.sma_l)
 
-    def is_sell_signal(self, ind):
-        if ind["CLOSE"] is None or ind["SMA_50"] is None:
-            return False
-        else:
-            return ind["CLOSE"] < ind["SMA_50"]
-        return None
+    def is_buy_signal(self, df):
+        return (df[self.sma_s] > df[self.sma_l]) & (
+            df[self.sma_s].shift(1) <= df[self.sma_l].shift(1)
+        )
 
-
-class PriceCrossoverEMA50(Strategy):
-    _DEPENDENCIES = ["EMA_50"]
-
-    def __init__(self):
-        self.name = "PriceCrossover with EMA_50"
-
-    def is_buy_signal(self, ind):
-        if ind["CLOSE"] is None or ind["EMA_50"] is None:
-            return False
-        else:
-            return ind["CLOSE"] > ind["EMA_50"]
-
-    def is_sell_signal(self, ind):
-        if ind["CLOSE"] is None or ind["EMA_50"] is None:
-            return False
-        else:
-            return ind["CLOSE"] < ind["EMA_50"]
-        return None
+    def is_sell_signal(self, df):
+        return (df[self.sma_s] < df[self.sma_l]) & (
+            df[self.sma_s].shift(1) >= df[self.sma_l].shift(1)
+        )
 
 
-class BuyAndHold(Strategy):
+# https://commodity.com/technical-analysis/momentum/
+
+
+class MOM_ZeroCrossing(Strategy):
     _DEPENDENCIES = []
 
-    def __init__(self):
-        self.name = "Buy and Hold"
+    def __init__(self, window):
+        self.name = "MOM_ZeroCrossing W:" + str(window)
+        self.mom = "MOM:" + str(window)
+        self._DEPENDENCIES.append(self.mom)
 
-    def is_buy_signal(self, ind):
-        return True
+    def is_buy_signal(self, df):
+        return (df[self.mom] > 0) & (df[self.mom].shift(1) <= 0)
 
-    def is_sell_signal(self, ind):
-        return False
-
-
-class GoldenCross200_50(Strategy):
-    _DEPENDENCIES = ["SMA_50", "SMA_200"]
-
-    def __init__(self):
-        self.name = "GoldenCross200_50"
-
-    def is_buy_signal(self, ind):
-        return ind["SMA_50"] > ind["SMA_200"]
-
-    def is_sell_signal(self, ind):
-        return ind["SMA_50"] < ind["SMA_200"]
-
-
-class GoldenCrossSMA200_Dropout(Strategy):
-    _DEPENDENCIES = ["SMA_50", "SMA_200"]
-
-    def __init__(self):
-        self.name = "GoldenCrossSMA200_Dropout"
-
-    def is_buy_signal(self, ind):
-        # Golden Cross
-        return ind["SMA_50"] > ind["SMA_200"]
-
-    def is_sell_signal(self, ind):
-        # Death Cross
-        return ind["CLOSE"] < ind["SMA_200"]
-
-
-class GoldenCrossSMA100_Dropout(Strategy):
-    _DEPENDENCIES = ["SMA_50", "SMA_200", "SMA_100"]
-
-    def __init__(self):
-        self.name = "GoldenCrossSMA100_Dropout"
-
-    def is_buy_signal(self, ind):
-        # Golden Cross
-        return ind["SMA_50"] > ind["SMA_200"]
-
-    def is_sell_signal(self, ind):
-        # Death Cross
-        return ind["CLOSE"] < ind["SMA_100"]
-
-
-class Hyterese(Strategy):
-    _DEPENDENCIES = ["SMA_50", "SMA_100"]
-
-    def __init__(self):
-        self.name = "Indiv Crossover"
-
-    def is_buy_signal(self, ind):
-        return ind["CLOSE"] > ind["SMA_50"]
-
-    def is_sell_signal(self, ind):
-        return ind["CLOSE"] < ind["SMA_100"]
+    def is_sell_signal(self, df):
+        return (df[self.mom] < 0) & (df[self.mom].shift(1) >= 0)
 
 
 """
@@ -139,9 +85,9 @@ class (Strategy):
     def __init__(self):
         self.name = ""    
 
-    def is_buy_signal(self, ind):
+    def is_buy_signal(self, df):
         return False
 
-    def is_sell_signal(self, ind):
+    def is_sell_signal(self, df):
         return False
 """

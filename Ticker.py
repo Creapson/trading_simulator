@@ -5,90 +5,35 @@ import pandas as pd
 import yfinance as yf
 
 INDICATOR_DEPENDENCIES = {
-    # leaf indicators
-    "SMA_5": [],
-    "SMA_10": [],
-    "SMA_20": [],
-    "SMA_40": [],
-    "SMA_50": [],
-    "SMA_100": [],
-    "SMA_200": [],
-    "EMA_5": [],
-    "EMA_10": [],
-    "EMA_12": [],
-    "EMA_20": [],
-    "EMA_26": [],
-    "EMA_50": [],
-    "WMA_10": [],
-    "WMA_20": [],
-    "DEMA_10": [],
-    "DEMA_20": [],
-    "TEMA_10": [],
-    "TEMA_20": [],
-    "TRIMA_20": [],
-    "KAMA_20": [],
-    "T3_5": [],
-    # RSI
-    "RSI_7": [],
-    "RSI_14": [],
-    "RSI_21": [],
     # MACD family
-    "MACD": ["EMA_12", "EMA_26"],
+    "MACD": ["EMA:12", "EMA:26"],
     "MACD_SIGNAL": ["MACD"],
     "MACD_HIST": ["MACD", "MACD_SIGNAL"],
     # Stochastic
-    "STOCH_FASTK": [],
     "STOCH_FASTD": ["STOCH_FASTK"],
     "STOCH_SLOWK": ["STOCH_FASTK"],
     "STOCH_SLOWD": ["STOCH_SLOWK"],
     # Stochastic RSI
     "STOCHRSI_FASTK": ["RSI_14"],
     "STOCHRSI_FASTD": ["STOCHRSI_FASTK"],
-    # CCI
-    "CCI_14": [],
-    "CCI_20": [],
-    # CMO
-    "CMO_14": [],
-    # Momentum
-    "MOM_10": [],
-    # Rate of Change
-    "ROC_10": [],
-    # Williams %R
-    "WILLR_14": [],
     # PPO / APO
-    "PPO": ["EMA_12", "EMA_26"],
-    "APO": ["EMA_12", "EMA_26"],
-    # Balance of Power
-    "BOP": [],
-    # Ultimate Oscillator
-    "ULTOSC": [],
+    "PPO": ["EMA:12", "EMA:26"],
+    "APO": ["EMA:12", "EMA:26"],
     # Volume indicators
-    "AD": [],
     "ADOSC": ["AD"],
-    "OBV": [],
-    "MFI_14": [],
     # Volatility / price-derived
-    "TYPPRICE": [],
-    "TRANGE": [],
     "ATR_14": ["TRANGE"],
     "NATR_14": ["ATR_14"],
     # Bollinger Bands
-    "BB_MIDDLE": [],
     "BB_UPPER": ["BB_MIDDLE"],
     "BB_LOWER": ["BB_MIDDLE"],
     # Directional Movement (building blocks)
-    "PLUS_DM": [],
-    "MINUS_DM": [],
     "PLUS_DI_14": ["PLUS_DM", "TRANGE"],
     "MINUS_DI_14": ["MINUS_DM", "TRANGE"],
     # ADX
     "ADX_14": ["PLUS_DI_14", "MINUS_DI_14"],
     # Aroon
-    "AROON_UP": [],
-    "AROON_DOWN": [],
     "AROON_OSC": ["AROON_UP", "AROON_DOWN"],
-    # Parabolic SAR
-    "SAR": [],
 }
 
 
@@ -106,6 +51,7 @@ class Ticker:
 
         self.is_loaded = False
         self.can_load_ticker = True
+        self.indicator_list = []
 
     def load_history(self):
         # try loading_from_file
@@ -123,9 +69,9 @@ class Ticker:
     def get_dataframe(self):
         return self.df
 
-    def get_available_indicator(self):
-        indicator = self._indicator_registry()
-        return indicator.keys()
+    def get_used_indicators(self):
+        print("ind list: ", self.indicator_list)
+        return self.indicator_list
 
     def set_timespan(self, start_time=None, end_time=None):
         try:
@@ -199,10 +145,6 @@ class Ticker:
             self.load_history()
 
         indicator = indicator.upper()
-        registry = self._indicator_registry()
-
-        if indicator not in registry:
-            raise ValueError(f"Unknown indicator: {indicator}")
 
         build_order = self._resolve_dependencies(indicator)
 
@@ -211,8 +153,9 @@ class Ticker:
                 continue
 
             try:
-                registry[ind]()
+                ind_add_func = self.get_indicator(ind)
                 print("Calcualted Indicator: ", ind)
+                self.indicator_list.append(ind)
                 return True
             except KeyError:
                 raise ValueError(f"No build rule registered for {ind}")
@@ -226,73 +169,135 @@ class Ticker:
                 return False
         return True
 
-    def _indicator_registry(self):
-        return {
-            "SMA_5": self.add_sma_5,
-            "SMA_10": self.add_sma_10,
-            "SMA_20": self.add_sma_20,
-            "SMA_40": self.add_sma_40,
-            "SMA_50": self.add_sma_50,
-            "SMA_100": self.add_sma_100,
-            "SMA_200": self.add_sma_200,
-            "EMA_5": self.add_ema_5,
-            "EMA_10": self.add_ema_10,
-            "EMA_12": self.add_ema_12,
-            "EMA_20": self.add_ema_20,
-            "EMA_26": self.add_ema_26,
-            "EMA_50": self.add_ema_50,
-            "WMA_10": self.add_wma_10,
-            "WMA_20": self.add_wma_20,
-            "DEMA_10": self.add_dema_10,
-            "DEMA_20": self.add_dema_20,
-            "TEMA_10": self.add_tema_10,
-            "TEMA_20": self.add_tema_20,
-            "TRIMA_20": self.add_trima_20,
-            "KAMA_20": self.add_kama_20,
-            "T3_5": self.add_t3_5,
-            "RSI_7": self.add_rsi_7,
-            "RSI_14": self.add_rsi_14,
-            "RSI_21": self.add_rsi_21,
-            "MACD": self.add_macd,
-            "MACD_SIGNAL": self.add_macd_signal,
-            "MACD_HIST": self.add_macd_hist,
-            "STOCH_FASTK": self.add_stoch_fastk,
-            "STOCH_FASTD": self.add_stoch_fastd,
-            "STOCH_SLOWK": self.add_stoch_slowk,
-            "STOCH_SLOWD": self.add_stoch_slowd,
-            "STOCHRSI_FASTK": self.add_stochrsi_fastk,
-            "STOCHRSI_FASTD": self.add_stochrsi_fastd,
-            "CCI_14": self.add_cci_14,
-            "CCI_20": self.add_cci_20,
-            "CMO_14": self.add_cmo_14,
-            "MOM_10": self.add_mom_10,
-            "ROC_10": self.add_roc_10,
-            "WILLR_14": self.add_willr_14,
-            "PPO": self.add_ppo,
-            "APO": self.add_apo,
-            "BOP": self.add_bop,
-            "ULTOSC": self.add_ultosc,
-            "AD": self.add_ad,
-            "ADOSC": self.add_adosc,
-            "OBV": self.add_obv,
-            "MFI_14": self.add_mfi_14,
-            "TYPPRICE": self.add_typprice,
-            "TRANGE": self.add_trange,
-            "ATR_14": self.add_atr_14,
-            "NATR_14": self.add_natr_14,
-            "BB_MIDDLE": self.add_bb_middle,
-            "BB_UPPER": self.add_bb_upper,
-            "BB_LOWER": self.add_bb_lower,
-            "PLUS_DM": self.add_plus_dm,
-            "MINUS_DM": self.add_minus_dm,
-            "PLUS_DI_14": self.add_plus_di_14,
-            "MINUS_DI_14": self.add_minus_di_14,
-            "ADX_14": self.add_adx_14,
-            "AROON_UP": self.add_aroon_up,
-            "AROON_DOWN": self.add_aroon_down,
-            "AROON_OSC": self.add_aroon_osc,
-            "SAR": self.add_sar,
-        }
+    def _indicator_demux(self, indicator):
+        pass
+
+    def get_indicator(self, indicator_name: str):
+        ind_split = indicator_name.split(":")
+        ind_type = ind_split[0]
+
+        ind_params = [int(ind_param) for ind_param in ind_split[1].split(":")]
+
+        match ind_type:
+            # Simple Moving Averages
+            case "SMA":
+                return self.add_sma(ind_params[0])
+
+            # Exponential Moving Averages
+            case "EMA":
+                return self.add_ema(ind_params[0])
+
+            # Weighted & Double/Triple EMA
+            case "WMA":
+                return self.add_wma(ind_params[0])
+            case "DEMA":
+                return self.add_dema(ind_params[0])
+            case "TEMA":
+                return self.add_tema(ind_params[0])
+            case "TRIMA":
+                return self.add_trima(ind_params[0])
+            case "KAMA_20":
+                return self.add_kama_20()
+            case "T3_5":
+                return self.add_t3_5()
+
+            # Momentum & RSI
+            case "RSI":
+                return self.add_rsi(ind_params[0])
+            case "MOM":
+                return self.add_mom(ind_params[0])
+            case "ROC":
+                return self.add_roc(ind_params[0])
+
+            # MACD
+            case "MACD":
+                return self.add_macd()
+            case "MACD_SIGNAL":
+                return self.add_macd_signal()
+            case "MACD_HIST":
+                return self.add_macd_hist()
+
+            # Stochastics
+            case "STOCH_FASTK":
+                return self.add_stoch_fastk()
+            case "STOCH_FASTD":
+                return self.add_stoch_fastd()
+            case "STOCH_SLOWK":
+                return self.add_stoch_slowk()
+            case "STOCH_SLOWD":
+                return self.add_stoch_slowd()
+            case "STOCHRSI_FASTK":
+                return self.add_stochrsi_fastk()
+            case "STOCHRSI_FASTD":
+                return self.add_stochrsi_fastd()
+
+            # Commodity & Volatility
+            case "CCI_14":
+                return self.add_cci_14()
+            case "CCI_20":
+                return self.add_cci_20()
+            case "CMO_14":
+                return self.add_cmo_14()
+            case "WILLR_14":
+                return self.add_willr_14()
+            case "PPO":
+                return self.add_ppo()
+            case "APO":
+                return self.add_apo()
+            case "BOP":
+                return self.add_bop()
+            case "ULTOSC":
+                return self.add_ultosc()
+
+            # Volume Indicators
+            case "AD":
+                return self.add_ad()
+            case "ADOSC":
+                return self.add_adosc()
+            case "OBV":
+                return self.add_obv()
+            case "MFI_14":
+                return self.add_mfi_14()
+
+            # Price & Volatility (ATR / Bollinger)
+            case "TYPPRICE":
+                return self.add_typprice()
+            case "TRANGE":
+                return self.add_trange()
+            case "ATR_14":
+                return self.add_atr_14()
+            case "NATR_14":
+                return self.add_natr_14()
+            case "BB_MIDDLE":
+                return self.add_bb_middle()
+            case "BB_UPPER":
+                return self.add_bb_upper()
+            case "BB_LOWER":
+                return self.add_bb_lower()
+
+            # Trend Indicators (ADX / Aroon / SAR)
+            case "PLUS_DM":
+                return self.add_plus_dm()
+            case "MINUS_DM":
+                return self.add_minus_dm()
+            case "PLUS_DI_14":
+                return self.add_plus_di_14()
+            case "MINUS_DI_14":
+                return self.add_minus_di_14()
+            case "ADX_14":
+                return self.add_adx_14()
+            case "AROON_UP":
+                return self.add_aroon_up()
+            case "AROON_DOWN":
+                return self.add_aroon_down()
+            case "AROON_OSC":
+                return self.add_aroon_osc()
+            case "SAR":
+                return self.add_sar()
+
+            # Fallback
+            case _:
+                raise ValueError(f"Indicator {indicator_name} not recognized.")
 
     def _resolve_dependencies(self, indicator: str, resolved=None, seen=None):
         if resolved is None:
@@ -322,90 +327,42 @@ class Ticker:
     # MOVING AVERAGES
 
     # Simple Moving Averages
-    def add_sma_5(self):
-        self.df["SMA_5"] = self.df["CLOSE"].rolling(window=5).mean()
-
-    def add_sma_10(self):
-        self.df["SMA_10"] = self.df["CLOSE"].rolling(window=10).mean()
-
-    def add_sma_20(self):
-        self.df["SMA_20"] = self.df["CLOSE"].rolling(window=20).mean()
-
-    def add_sma_40(self):
-        self.df["SMA_40"] = self.df["CLOSE"].rolling(window=40).mean()
-
-    def add_sma_50(self):
-        self.df["SMA_50"] = self.df["CLOSE"].rolling(window=50).mean()
-
-    def add_sma_100(self):
-        self.df["SMA_100"] = self.df["CLOSE"].rolling(window=100).mean()
-
-    def add_sma_200(self):
-        self.df["SMA_200"] = self.df["CLOSE"].rolling(window=200).mean()
+    def add_sma(self, days):
+        self.df["SMA:" + str(days)] = self.df["CLOSE"].rolling(window=days).mean()
 
     # Exponential Moving Averages
-    def add_ema_5(self):
-        self.df["EMA_5"] = self.df["CLOSE"].ewm(span=5, adjust=False).mean()
-
-    def add_ema_10(self):
-        self.df["EMA_10"] = self.df["CLOSE"].ewm(span=10, adjust=False).mean()
-
-    def add_ema_12(self):
-        self.df["EMA_12"] = self.df["CLOSE"].ewm(span=12, adjust=False).mean()
-
-    def add_ema_20(self):
-        self.df["EMA_20"] = self.df["CLOSE"].ewm(span=20, adjust=False).mean()
-
-    def add_ema_26(self):
-        self.df["EMA_26"] = self.df["CLOSE"].ewm(span=26, adjust=False).mean()
-
-    def add_ema_50(self):
-        self.df["EMA_50"] = self.df["CLOSE"].ewm(span=50, adjust=False).mean()
+    def add_ema(self, days):
+        self.df["EMA:" + str(days)] = (
+            self.df["CLOSE"].ewm(span=days, adjust=False).mean()
+        )
 
     # Weighted Moving Averages
-    def _wma(self, period):
+    def add_wma(self, period):
         weights = np.arange(1, period + 1)
-        return (
+        self.df["SMA:" + str(period)] = (
             self.df["CLOSE"]
             .rolling(period)
             .apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
         )
 
-    def add_wma_10(self):
-        self.df["WMA_10"] = self._wma(10)
-
-    def add_wma_20(self):
-        self.df["WMA_20"] = self._wma(20)
-
     # Double Exponential Moving Average
-    def _dema(self, period):
+    def add_dema(self, period):
         ema = self.df["CLOSE"].ewm(span=period, adjust=False).mean()
         ema_ema = ema.ewm(span=period, adjust=False).mean()
-        return 2 * ema - ema_ema
-
-    def add_dema_10(self):
-        self.df["DEMA_10"] = self._dema(10)
-
-    def add_dema_20(self):
-        self.df["DEMA_20"] = self._dema(20)
+        self.df["DEMA:" + str(period)] = 2 * ema - ema_ema
 
     # Triple Exponential Moving Average
-    def _tema(self, period):
+
+    def add_tema(self, period):
         ema1 = self.df["CLOSE"].ewm(span=period, adjust=False).mean()
         ema2 = ema1.ewm(span=period, adjust=False).mean()
         ema3 = ema2.ewm(span=period, adjust=False).mean()
-        return 3 * (ema1 - ema2) + ema3
-
-    def add_tema_10(self):
-        self.df["TEMA_10"] = self._tema(10)
-
-    def add_tema_20(self):
-        self.df["TEMA_20"] = self._tema(20)
+        self.df["TEMA:" + str(period)] = 3 * (ema1 - ema2) + ema3
 
     # Triangular Moving Average
-    def add_trima_20(self):
-        self.df["TRIMA_20"] = (
-            self.df["CLOSE"].rolling(window=20).mean().rolling(window=20).mean()
+    def add_trima(self, period):
+        self.df["TRIMA:" + str(period)] = (
+            self.df["CLOSE"].rolling(window=period).mean().rolling(window=period).mean()
         )
 
     # Kaufman Adaptive Moving Average
@@ -450,7 +407,7 @@ class Ticker:
 
     # Relative Strength Index
 
-    def _rsi(self, period):
+    def add_rsi(self, period):
         delta = self.df["CLOSE"].diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
@@ -459,16 +416,15 @@ class Ticker:
         avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
 
         rs = avg_gain / avg_loss
-        return 100 - (100 / (1 + rs))
+        self.df["RSI:" + str(period)] = 100 - (100 / (1 + rs))
 
-    def add_rsi_7(self):
-        self.df["RSI_7"] = self._rsi(7)
+    # Momentum
+    def add_mom(self, past):
+        self.df["MOM:" + str(past)] = self.df["CLOSE"].diff(past)
 
-    def add_rsi_14(self):
-        self.df["RSI_14"] = self._rsi(14)
-
-    def add_rsi_21(self):
-        self.df["RSI_21"] = self._rsi(21)
+    # Rate of Change
+    def add_roc(self, past):
+        self.df["ROC:" + str(past)] = self.df["CLOSE"].pct_change(past)
 
     # Moving Average Convergence Divergence
     def add_macd(self):
@@ -524,14 +480,6 @@ class Ticker:
         gain = delta.clip(lower=0).rolling(14).sum()
         loss = -delta.clip(upper=0).rolling(14).sum()
         self.df["CMO_14"] = 100 * (gain - loss) / (gain + loss)
-
-    # Momentum
-    def add_mom_10(self):
-        self.df["MOM_10"] = self.df["CLOSE"].diff(10)
-
-    # Rate of Change
-    def add_roc_10(self):
-        self.df["ROC_10"] = self.df["CLOSE"].pct_change(10) * 100
 
     def add_willr_14(self):
         high = self.df["HIGH"].rolling(14).max()
