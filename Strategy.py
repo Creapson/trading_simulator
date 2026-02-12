@@ -60,6 +60,31 @@ class SMA_Cross(Strategy):
         )
 
 
+class EMA_Cross(Strategy):
+    def __init__(self, short, long):
+        if short > long:
+            tmp = long
+            long = short
+            short = tmp
+
+        self.name = "EMA_CROSS S:" + str(short) + " L:" + str(long)
+
+        self.ema_s = "EMA:" + str(short)
+        self.ema_l = "EMA:" + str(long)
+        self._DEPENDENCIES.append(self.ema_s)
+        self._DEPENDENCIES.append(self.ema_l)
+
+    def is_buy_signal(self, df):
+        return (df[self.ema_s] > df[self.ema_l]) & (
+            df[self.ema_s].shift(1) <= df[self.ema_l].shift(1)
+        )
+
+    def is_sell_signal(self, df):
+        return (df[self.ema_s] < df[self.ema_l]) & (
+            df[self.ema_s].shift(1) >= df[self.ema_l].shift(1)
+        )
+
+
 # https://commodity.com/technical-analysis/momentum/
 
 

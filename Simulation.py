@@ -31,7 +31,7 @@ class Simulation:
             indicators.update(strategy.get_dependencies())
         indicator_list = list(indicators)
         self.ticker_loaded = self.ticker.add_indicators(indicator_list)
-        # self.ticker.set_timespan(start_time="2024-01-01 00:00")
+        self.ticker.set_timespan(start_time="2002-01-01 00:00")
 
     def start(self):
         self.results = []
@@ -67,7 +67,6 @@ class Simulation:
 
             close_price = df.loc[date, "CLOSE"]
             portfolio_value = self.portfolio.get_value(self.ticker.ticker, close_price)
-
             results.append({"Date": date, strategy.name: portfolio_value})
 
         return pd.DataFrame(results).set_index("Date"), strategy.name

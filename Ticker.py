@@ -150,17 +150,18 @@ class Ticker:
 
         for ind in build_order:
             if ind in self.df.columns and not force:
+                print("Skipped ind: ", ind)
                 continue
 
             try:
-                ind_add_func = self.get_indicator(ind)
+                self.calc_indicator(ind)
                 print("Calcualted Indicator: ", ind)
                 self.indicator_list.append(ind)
-                return True
             except KeyError:
                 raise ValueError(f"No build rule registered for {ind}")
                 return False
-        return False
+
+        return True
 
     def add_indicators(self, indicators: list[str], force: bool = False):
         for ind in indicators:
@@ -172,11 +173,12 @@ class Ticker:
     def _indicator_demux(self, indicator):
         pass
 
-    def get_indicator(self, indicator_name: str):
+    def calc_indicator(self, indicator_name: str):
         ind_split = indicator_name.split(":")
         ind_type = ind_split[0]
 
-        ind_params = [int(ind_param) for ind_param in ind_split[1].split(":")]
+        if len(ind_split) > 1:
+            ind_params = [int(ind_param) for ind_param in ind_split[1].split(":")]
 
         match ind_type:
             # Simple Moving Averages
@@ -428,7 +430,7 @@ class Ticker:
 
     # Moving Average Convergence Divergence
     def add_macd(self):
-        self.df["MACD"] = self.df["EMA_12"] - self.df["EMA_26"]
+        self.df["MACD"] = self.df["EMA:12"] - self.df["EMA:26"]
 
     def add_macd_signal(self):
         self.df["MACD_SIGNAL"] = self.df["MACD"].ewm(span=9, adjust=False).mean()
@@ -489,12 +491,12 @@ class Ticker:
     # Percentage Price Oscillator
     def add_ppo(self):
         self.df["PPO"] = (
-            100 * (self.df["EMA_12"] - self.df["EMA_26"]) / self.df["EMA_26"]
+            100 * (self.df["EMA:12"] - self.df["EMA:26"]) / self.df["EMA:26"]
         )
 
     # Absolute Price Oscillator
     def add_apo(self):
-        self.df["APO"] = self.df["EMA_12"] - self.df["EMA_26"]
+        self.df["APO"] = self.df["EMA:12"] - self.df["EMA:26"]
 
     # Balance of Power
     def add_bop(self):
