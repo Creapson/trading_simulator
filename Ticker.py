@@ -4,6 +4,26 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+# Define which indicators are "Overlays" (Price-scale)
+# Everything else will default to "Oscillator" (Secondary-scale)
+CHART_OVERLAYS = {
+    "SMA_CLOSE",
+    "SMA_HIGH",
+    "SMA_LOW",
+    "SMA_OPEN",
+    "EMA",
+    "WMA",
+    "DEMA",
+    "TEMA",
+    "TRIMA",
+    "KAMA_20",
+    "T3_5",
+    "BB_UPPER",
+    "BB_LOWER",
+    "BB_MIDDLE",
+    "SAR",
+}
+
 INDICATOR_DEPENDENCIES = {
     # MACD family
     "MACD": ["EMA:12", "EMA:26"],
@@ -14,7 +34,7 @@ INDICATOR_DEPENDENCIES = {
     "STOCH_SLOWK": ["STOCH_FASTK"],
     "STOCH_SLOWD": ["STOCH_SLOWK"],
     # Stochastic RSI
-    "STOCHRSI_FASTK": ["RSI_14"],
+    "STOCHRSI_FASTK": ["RSI:14"],
     "STOCHRSI_FASTD": ["STOCHRSI_FASTK"],
     # PPO / APO
     "PPO": ["EMA:12", "EMA:26"],
@@ -70,7 +90,6 @@ class Ticker:
         return self.df
 
     def get_used_indicators(self):
-        print("ind list: ", self.indicator_list)
         return self.indicator_list
 
     def set_timespan(self, start_time=None, end_time=None):
@@ -101,7 +120,6 @@ class Ticker:
         print("Downloading Ticker from Yahoo-Finance!")
         try:
             self.df = yf.download(self.ticker, period="max", interval="1d")
-            print(self.df)
 
             # Download failed or returned no data
             if self.df is None or self.df.empty:
@@ -113,7 +131,6 @@ class Ticker:
                 self.df.columns = self.df.columns.get_level_values(0)
 
             self.df.columns = self.df.columns.str.upper()
-            print(self.df)
 
             self.df.index = pd.to_datetime(self.df.index)
             self.df = self.df.sort_index()
@@ -150,7 +167,6 @@ class Ticker:
 
         for ind in build_order:
             if ind in self.df.columns and not force:
-                print("Skipped ind: ", ind)
                 continue
 
             try:
@@ -178,17 +194,26 @@ class Ticker:
         ind_type = ind_split[0]
 
         if len(ind_split) > 1:
-            ind_params = [int(ind_param) for ind_param in ind_split[1].split(":")]
+            ind_params = [int(ind_param) for ind_param in ind_split[1].split("_")]
 
         match ind_type:
             # Simple Moving Averages
-            case "SMA":
-                return self.add_sma(ind_params[0])
+            case "SMA_CLOSE":
+                return self.add_sma_close(ind_params[0])
+            case "SMA_HIGH":
+                return self.add_sma_high(ind_params[0])
+            case "SMA_LOW":
+                return self.add_sma_low(ind_params[0])
+            case "SMA_OPEN":
+                return self.add_sma_open(ind_params[0])
+            case "SMA_SLOPE":
+                return self.add_sma_slope(ind_params[0], ind_params[1])
 
             # Exponential Moving Averages
             case "EMA":
                 return self.add_ema(ind_params[0])
-
+            case "EMA_SLOPE":
+                return self.add_ema_slope(ind_params[0], ind_params[1])
             # Weighted & Double/Triple EMA
             case "WMA":
                 return self.add_wma(ind_params[0])
@@ -329,8 +354,23 @@ class Ticker:
     # MOVING AVERAGES
 
     # Simple Moving Averages
-    def add_sma(self, days):
-        self.df["SMA:" + str(days)] = self.df["CLOSE"].rolling(window=days).mean()
+    def add_sma_close(self, days):
+        self.df["SMA_CLOSE:" + str(days)] = self.df["CLOSE"].rolling(window=days).mean()
+
+    def add_sma_high(self, days):
+        self.df["SMA_HIGH:" + str(days)] = self.df["HIGH"].rolling(window=days).mean()
+
+    def add_sma_low(self, days):
+        self.df["SMA_LOW:" + str(days)] = self.df["LOW"].rolling(window=days).mean()
+
+    def add_sma_open(self, days):
+        self.df["SMA_OPEN:" + str(days)] = self.df["OPEN"].rolling(window=days).mean()
+
+    def add_sma_slope(self, days, shift):
+        sma = "SMA_CLOSE:" + str(days)
+        self.add_indicator(sma)
+        sma_slope = "SMA_SLOPE:" + str(days) + "_" + str(shift)
+        self.df[sma_slope] = ((self.df[sma] / self.df[sma].shift(shift)) - 1) * days
 
     # Exponential Moving Averages
     def add_ema(self, days):
@@ -338,10 +378,16 @@ class Ticker:
             self.df["CLOSE"].ewm(span=days, adjust=False).mean()
         )
 
+    def add_ema_slope(self, days, shift):
+        ema = "EMA:" + str(days)
+        self.add_indicator(ema)
+        ema_slope = "EMA_SLOPE:" + str(days) + "_" + str(shift)
+        self.df[ema_slope] = ((self.df[ema] / self.df[ema].shift(shift)) - 1) * days
+
     # Weighted Moving Averages
     def add_wma(self, period):
         weights = np.arange(1, period + 1)
-        self.df["SMA:" + str(period)] = (
+        self.df["WMA:" + str(period)] = (
             self.df["CLOSE"]
             .rolling(period)
             .apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
@@ -418,7 +464,7 @@ class Ticker:
         avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
 
         rs = avg_gain / avg_loss
-        self.df["RSI:" + str(period)] = 100 - (100 / (1 + rs))
+        self.df["RSI:" + str(period)] = 1 - (1 / (1 + rs))
 
     # Momentum
     def add_mom(self, past):
@@ -442,7 +488,7 @@ class Ticker:
     def add_stoch_fastk(self, period=14):
         low = self.df["LOW"].rolling(period).min()
         high = self.df["HIGH"].rolling(period).max()
-        self.df["STOCH_FASTK"] = 100 * (self.df["CLOSE"] - low) / (high - low)
+        self.df["STOCH_FASTK"] = 1 * (self.df["CLOSE"] - low) / (high - low)
 
     def add_stoch_fastd(self):
         self.df["STOCH_FASTD"] = self.df["STOCH_FASTK"].rolling(3).mean()
@@ -455,10 +501,10 @@ class Ticker:
 
     # Stochastik RSI
     def add_stochrsi_fastk(self, period=14):
-        rsi = self.df["RSI_14"]
+        rsi = self.df["RSI:14"]
         min_rsi = rsi.rolling(period).min()
         max_rsi = rsi.rolling(period).max()
-        self.df["STOCHRSI_FASTK"] = 100 * (rsi - min_rsi) / (max_rsi - min_rsi)
+        self.df["STOCHRSI_FASTK"] = 1 * (rsi - min_rsi) / (max_rsi - min_rsi)
 
     def add_stochrsi_fastd(self):
         self.df["STOCHRSI_FASTD"] = self.df["STOCHRSI_FASTK"].rolling(3).mean()
@@ -481,18 +527,16 @@ class Ticker:
         delta = self.df["CLOSE"].diff()
         gain = delta.clip(lower=0).rolling(14).sum()
         loss = -delta.clip(upper=0).rolling(14).sum()
-        self.df["CMO_14"] = 100 * (gain - loss) / (gain + loss)
+        self.df["CMO_14"] = 1 * (gain - loss) / (gain + loss)
 
     def add_willr_14(self):
         high = self.df["HIGH"].rolling(14).max()
         low = self.df["LOW"].rolling(14).min()
-        self.df["WILLR_14"] = -100 * (high - self.df["CLOSE"]) / (high - low)
+        self.df["WILLR_14"] = -1 * (high - self.df["CLOSE"]) / (high - low)
 
     # Percentage Price Oscillator
     def add_ppo(self):
-        self.df["PPO"] = (
-            100 * (self.df["EMA:12"] - self.df["EMA:26"]) / self.df["EMA:26"]
-        )
+        self.df["PPO"] = 1 * (self.df["EMA:12"] - self.df["EMA:26"]) / self.df["EMA:26"]
 
     # Absolute Price Oscillator
     def add_apo(self):
@@ -517,7 +561,7 @@ class Ticker:
         avg14 = bp.rolling(14).sum() / tr.rolling(14).sum()
         avg28 = bp.rolling(28).sum() / tr.rolling(28).sum()
 
-        self.df["ULTOSC"] = 100 * (4 * avg7 + 2 * avg14 + avg28) / 7
+        self.df["ULTOSC"] = 1 * (4 * avg7 + 2 * avg14 + avg28) / 7
 
     # VOLUME INDUCATOR
 
@@ -564,7 +608,7 @@ class Ticker:
         neg_sum = negative_flow.rolling(14).sum()
 
         mfr = pos_sum / neg_sum
-        self.df["MFI_14"] = 100 - (100 / (1 + mfr))
+        self.df["MFI_14"] = 1 - (1 / (1 + mfr))
 
     # VOLATILITY INDICATORS
     # Typical Price
@@ -595,7 +639,7 @@ class Ticker:
 
     # Normalized ATR
     def add_natr_14(self):
-        self.df["NATR_14"] = 100 * self.df["ATR_14"] / self.df["CLOSE"]
+        self.df["NATR_14"] = 1 * self.df["ATR_14"] / self.df["CLOSE"]
 
     # Bollinger Bands
     def add_bb_middle(self):
@@ -639,7 +683,7 @@ class Ticker:
         tr_smooth = tr.ewm(alpha=1 / 14, adjust=False).mean()
         dm_smooth = plus_dm.ewm(alpha=1 / 14, adjust=False).mean()
 
-        self.df["PLUS_DI_14"] = 100 * dm_smooth / tr_smooth
+        self.df["PLUS_DI_14"] = 1 * dm_smooth / tr_smooth
 
     def add_minus_di_14(self):
         tr = self.df["TRANGE"]
@@ -648,14 +692,14 @@ class Ticker:
         tr_smooth = tr.ewm(alpha=1 / 14, adjust=False).mean()
         dm_smooth = minus_dm.ewm(alpha=1 / 14, adjust=False).mean()
 
-        self.df["MINUS_DI_14"] = 100 * dm_smooth / tr_smooth
+        self.df["MINUS_DI_14"] = 1 * dm_smooth / tr_smooth
 
     # Average Directional Index
     def add_adx_14(self):
         plus_di = self.df["PLUS_DI_14"]
         minus_di = self.df["MINUS_DI_14"]
 
-        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+        dx = 1 * (plus_di - minus_di).abs() / (plus_di + minus_di)
         self.df["ADX_14"] = dx.ewm(alpha=1 / 14, adjust=False).mean()
 
     # Aroon Indicator
@@ -668,7 +712,7 @@ class Ticker:
                 raw=True,
             )
         )
-        self.df["AROON_UP"] = 100 * (period - rolling_high_idx) / period
+        self.df["AROON_UP"] = 1 * (period - rolling_high_idx) / period
 
     def add_aroon_down(self, period=14):
         rolling_low_idx = (
@@ -679,7 +723,7 @@ class Ticker:
                 raw=True,
             )
         )
-        self.df["AROON_DOWN"] = 100 * (period - rolling_low_idx) / period
+        self.df["AROON_DOWN"] = 1 * (period - rolling_low_idx) / period
 
     def add_aroon_osc(self):
         self.df["AROON_OSC"] = self.df["AROON_UP"] - self.df["AROON_DOWN"]

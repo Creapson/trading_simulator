@@ -3,23 +3,33 @@ from Strategy import *
 from Ticker import Ticker
 
 strats = []
-strats.append(SMA_Cross(50, 200))
-# strats.append(SMA_Cross(100, 300))
+tickers = []
 
-for window in range(1, 30, 1):
-    strats.append(MOM_ZeroCrossing(window))
+# tickers.append(Ticker("^SPX"))
+# tickers.append(Ticker("BRK-B"))
 
-ticker = Ticker("AFX.DE")
-ticker.add_indicator("MACD")
-# ticker.add_indicator("MOM:10")
+tickers.append(Ticker("MSFT"))
+tickers.append(Ticker("AAPL"))
+tickers.append(Ticker("TSLA"))
+tickers.append(Ticker("MOH"))
+tickers.append(Ticker("PAYC"))
+tickers.append(Ticker("MTCH"))
+tickers.append(Ticker("LW"))
 
-# for short in range(10, 100, 20):
-# strats.append(EMA_Cross(12, 26))
-strats.append(MOM_ZeroCrossing(12))
+for short in range(10, 110, 20):
+    for long in range(100, 300, 25):
+        strats.append(SMA_Cross(short, long))
+
+# strats.append(SMA_Cross(10, 250))
+# strats.append(EMA_SLOPE_CHANGE(125, 2, 0.25))
 
 print("Number of Strats: ", len(strats))
 
 # sim = Simulation(ticker=ticker, strategys=strats)
-sim = Simulation(ticker=ticker, strategys=strats)
+sim = Simulation(tickers=tickers, strategys=strats)
+
+# sim.set_timespan(start="2000-01-01 00:00")
 sim.start()
-sim.plot_results(show_indicators=False, log_scale=True)
+df = sim.quick_summary()
+df.to_csv("results.csv")
+# sim.plot_results(show_indicators=True, log_scale=True)

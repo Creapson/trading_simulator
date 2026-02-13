@@ -36,7 +36,7 @@ class Strategy:
 
 
 class SMA_Cross(Strategy):
-    def __init__(self, days_short, days_long):
+    def __init__(self, days_short=50, days_long=200):
         if days_short > days_long:
             tmp = days_long
             days_long = days_short
@@ -44,8 +44,8 @@ class SMA_Cross(Strategy):
 
         self.name = "SMA_CROSS S:" + str(days_short) + " L:" + str(days_long)
 
-        self.sma_s = "SMA:" + str(days_short)
-        self.sma_l = "SMA:" + str(days_long)
+        self.sma_s = "SMA_CLOSE:" + str(days_short)
+        self.sma_l = "SMA_CLOSE:" + str(days_long)
         self._DEPENDENCIES.append(self.sma_s)
         self._DEPENDENCIES.append(self.sma_l)
 
@@ -101,6 +101,52 @@ class MOM_ZeroCrossing(Strategy):
 
     def is_sell_signal(self, df):
         return (df[self.mom] < 0) & (df[self.mom].shift(1) >= 0)
+
+
+class SMA_SLOPE_CHANGE(Strategy):
+    _DEPENDENCIES = []
+
+    def __init__(self, window=20, shift=3, threshold=0.1):
+        self.name = (
+            "SMA_SLOPE_CHANGE W:"
+            + str(window)
+            + " S:"
+            + str(shift)
+            + " TH:"
+            + str(threshold)
+        )
+        self.mom_slope = "SMA_SLOPE:" + str(window) + "_" + str(shift)
+        self.th = threshold
+        self._DEPENDENCIES.append(self.mom_slope)
+
+    def is_buy_signal(self, df):
+        return (df[self.mom_slope] > self.th) & (df[self.mom_slope].shift(1) <= self.th)
+
+    def is_sell_signal(self, df):
+        return (df[self.mom_slope] < self.th) & (df[self.mom_slope].shift(1) >= self.th)
+
+
+class EMA_SLOPE_CHANGE(Strategy):
+    _DEPENDENCIES = []
+
+    def __init__(self, window=20, shift=3, threshold=0.1):
+        self.name = (
+            "EMA_SLOPE_CHANGE W:"
+            + str(window)
+            + " S:"
+            + str(shift)
+            + " TH:"
+            + str(threshold)
+        )
+        self.ema_slope = "EMA_SLOPE:" + str(window) + "_" + str(shift)
+        self.th = threshold
+        self._DEPENDENCIES.append(self.ema_slope)
+
+    def is_buy_signal(self, df):
+        return (df[self.ema_slope] > self.th) & (df[self.ema_slope].shift(1) <= self.th)
+
+    def is_sell_signal(self, df):
+        return (df[self.ema_slope] < self.th) & (df[self.ema_slope].shift(1) >= self.th)
 
 
 """
