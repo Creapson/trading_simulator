@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 class Strategy:
@@ -33,6 +34,17 @@ class Strategy:
 
     def is_sell_signal(self):
         return None
+
+
+class BuyAndHold(Strategy):
+    def __init__(self):
+        self.name = "Buy and Hold"
+
+    def is_buy_signal(self, df):
+        return pd.Series(True, index=df.index)
+
+    def is_sell_signal(self, df):
+        return pd.Series(False, index=df.index)
 
 
 class SMA_Cross(Strategy):
@@ -101,6 +113,21 @@ class MOM_ZeroCrossing(Strategy):
 
     def is_sell_signal(self, df):
         return (df[self.mom] < 0) & (df[self.mom].shift(1) >= 0)
+
+
+class ADOSC_ZeroCrossing(Strategy):
+    _DEPENDENCIES = []
+
+    def __init__(self):
+        self.name = "ADOSC_ZeroCrossing"
+        self.ind = "ADOSC"
+        self._DEPENDENCIES.append(self.ind)
+
+    def is_buy_signal(self, df):
+        return (df[self.ind] > 0) & (df[self.ind].shift(1) <= 0)
+
+    def is_sell_signal(self, df):
+        return (df[self.ind] < 0) & (df[self.ind].shift(1) >= 0)
 
 
 class SMA_SLOPE_CHANGE(Strategy):

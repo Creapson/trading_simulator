@@ -64,6 +64,7 @@ class Ticker:
     desc: str = None
 
     def __init__(self, ticker, name=None, desc=None):
+        self.yf_ticker = yf.Ticker(ticker)
         self.ticker = ticker
         self.name = name
         self.desc = desc
@@ -72,6 +73,12 @@ class Ticker:
         self.is_loaded = False
         self.can_load_ticker = True
         self.indicator_list = []
+
+        self.load()
+
+    def load(self):
+        self.load_history()
+        # self.load_financials()
 
     def load_history(self):
         # try loading_from_file
@@ -85,6 +92,11 @@ class Ticker:
             self.can_load_ticker = False
         else:
             self.can_load_ticker = True
+
+    def load_financials(self):
+        print(self.yf_ticker.get_financials(freq="quarterly"))
+        print(self.yf_ticker.get_fast_info())
+        print(self.yf_ticker.get_earnings_history())
 
     def get_dataframe(self):
         return self.df
@@ -135,17 +147,13 @@ class Ticker:
             self.df.index = pd.to_datetime(self.df.index)
             self.df = self.df.sort_index()
 
-            self.save_to_file()
+            self.df.to_csv("data/ticker/history/" + self.ticker + ".csv")
+            print(f"Saved {self.ticker}.csv")
             return True
 
         except Exception as e:
             print(f"Download failed with error: {e}")
             return False
-
-    def save_to_file(self):
-        self.df.to_csv("data/ticker/history/" + self.ticker + ".csv")
-        print(f"Saved {self.ticker}.csv")
-        pass
 
     def print_info(self):
         # Display basic info
@@ -171,7 +179,7 @@ class Ticker:
 
             try:
                 self.calc_indicator(ind)
-                print("Calcualted Indicator: ", ind)
+                # print("Calcualted Indicator: ", ind)
                 self.indicator_list.append(ind)
             except KeyError:
                 raise ValueError(f"No build rule registered for {ind}")
@@ -185,6 +193,9 @@ class Ticker:
             if not succes:
                 return False
         return True
+
+    def dropna(self):
+        self.df.dropna()
 
     def _indicator_demux(self, indicator):
         pass

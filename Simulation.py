@@ -1,3 +1,5 @@
+import time
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -21,80 +23,160 @@ class Simulation:
 
         self.results = []
         self.indicator_list = []
+        self.summary_data = {}
 
     def calc_indicators(self, ticker):
         indicators = set()
         for strategy in self.strategys:
             indicators.update(strategy.get_dependencies())
         indicator_list = list(indicators)
-        return ticker.add_indicators(indicator_list)
+        success = ticker.add_indicators(indicator_list)
+        ticker.dropna()
+        return success
 
     def set_timespan(self, start, end):
         self.ticker.set_timespan(start_time=start)
 
-    def start(self):
-        self.results = []
+    def start(self, show_progress=True):
+        def printProgressBar(
+            iteration,
+            total,
+            start_time,  # Added start_time parameter
+            prefix="",
+            suffix="",
+            decimals=1,
+            length=100,
+            fill="█",
+            printEnd="\r",
+        ):
+            percent = ("{0:." + str(decimals) + "f}").format(
+                100 * (iteration / float(total))
+            )
+            filledLength = int(length * iteration // total)
+            bar = fill * filledLength + "-" * (length - filledLength)
 
-        for ticker in self.tickers:
-            loaded = self.calc_indicators(ticker)
-            if not loaded:
-                print("Ticker not loaded properly. Cant start Simulation!")
+            # --- Time Calculation ---
+            elapsed_time = time.time() - start_time
+            avg_time_per_iteration = elapsed_time / iteration
+            remaining_iterations = total - iteration
+            eta_seconds = int(remaining_iterations * avg_time_per_iteration)
 
-            for strategy in self.strategys:
-                print("Started Simulator for: ", strategy.name)
-                result, strat_name = self.simulate(strategy, ticker)
-                self.results.append((result, strat_name, ticker))
+            # Format seconds into M:S or H:M:S
+            eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+            # ------------------------
 
-    def simulate(self, strategy, ticker):
-        df = ticker.get_dataframe().dropna()
-
-        signals = strategy.evaluate(df)
-
-        signals = signals.reindex(df.index).fillna(0).shift(1)
-
-        portfolio = Portfolio(cash=df["CLOSE"].iloc[0])
-
-        results = []
-
-        for date in df.index:
-            signal = signals.loc[date]
-
-            if signal == 1:
-                price = df.loc[date, "OPEN"]
-                portfolio.buy_stock(ticker.ticker, price)
-
-            elif signal == -1:
-                price = df.loc[date, "OPEN"]
-                portfolio.sell_stock(ticker.ticker, price)
-
-            close_price = df.loc[date, "CLOSE"]
-            portfolio_value = portfolio.get_value(ticker.ticker, close_price)
-            results.append({"Date": date, strategy.name: portfolio_value})
-
-        return pd.DataFrame(results).set_index("Date"), strategy.name
-
-    def quick_summary(self):
-        summary_data = {}
-
-        for result, name, ticker in self.results:
-            if name not in summary_data:
-                summary_data[name] = {"Strategy": name}
-
-            performance = (
-                result[name].iloc[-1] / ticker.get_dataframe()["CLOSE"].iloc[-1]
+            print(
+                f"\r{prefix} |{bar}| {percent}% {suffix} | ETA: {eta_str}", end=printEnd
             )
 
-            summary_data[name][ticker.ticker] = performance
+            if iteration == total:
+                print()
 
-        df = pd.DataFrame(list(summary_data.values())).set_index("Strategy")
-        df["mean"] = df.mean(axis=1)
-        df = df.sort_values("mean")
+        self.results = []
+        start_time = time.time()  # Capture start time
 
-        print("\n\n=====QUICK-SUMMARY=====\n\n")
+        # precalc all indicators for the tickers
+        for ticker in self.tickers:
+            print(f"Calculating indicators for: {ticker.ticker}")
+            loaded = self.calc_indicators(ticker)
+            if not loaded:
+                print(f"\nTicker {ticker} not loaded properly. Skipping...")
+                return
+
+        # counter
+        i = 0
+        for strategy in self.strategys:
+            results = []
+            for ticker in self.tickers:
+                if not show_progress:
+                    print("Started Simulator for: ", strategy.name)
+                result, strat_name = self.simulate(strategy, ticker)
+                results.append((result, strat_name, ticker))
+                if len(self.tickers) == 1:
+                    self.results.append((result, strat_name, ticker))
+                i += 1
+
+                if show_progress and i % 25 == 0:
+                    printProgressBar(
+                        i,
+                        len(self.strategys) * len(self.tickers),
+                        start_time,  # Pass start time here
+                        prefix="Progress:",
+                        suffix="Complete",
+                        length=50,
+                    )
+
+            # interpret all the results for this ticker
+            avg_annual_return = 0
+            for result, name, _ in results:
+                annual_return = self.get_annual_return(result)
+                avg_annual_return += annual_return
+
+            avg_annual_return = avg_annual_return / len(results)
+
+            self.add_summary(name, avg_annual_return)
+
+    def simulate(self, strategy, ticker):
+        df = ticker.get_dataframe()
+        if df.empty:
+            return pd.Series(dtype="float64"), strategy.name
+
+        signals = strategy.evaluate(df)
+        signals = signals.reindex(df.index).fillna(0).shift(1).to_numpy()
+
+        open_prices = df["OPEN"].to_numpy()
+        close_prices = df["CLOSE"].to_numpy()
+        dates = df.index
+
+        portfolio = Portfolio(cash=close_prices[0])
+
+        values = []
+
+        for i in range(len(df)):
+            signal = signals[i]
+
+            if signal == 1:
+                portfolio.buy_stock(ticker.ticker, open_prices[i])
+            elif signal == -1:
+                portfolio.sell_stock(ticker.ticker, open_prices[i])
+
+            portfolio_value = portfolio.get_value(ticker.ticker, close_prices[i])
+            values.append(portfolio_value)
+
+        result = pd.DataFrame({"Value": values}, index=dates)
+        return result, strategy.name
+
+    def get_annual_return(
+        self,
+        result,
+    ):
+        if result.empty or len(result) < 2:
+            return 0
+        total_days = (result.index.max() - result.index.min()).days
+        num_years = total_days / 365.25
+
+        start_price = result["Value"].iloc[0]
+        end_price = result["Value"].iloc[-1]
+
+        annual_return = (end_price / start_price) ** (1 / num_years) - 1
+
+        return annual_return
+
+    def add_summary(self, name, avg_annual_return=None):
+        if name not in self.summary_data:
+            self.summary_data[name] = {"Strategy": name}
+
+        self.summary_data[name]["Average Annual Return"] = avg_annual_return
+
+    def get_quick_summary(self):
+        df = pd.DataFrame(list(self.summary_data.values())).set_index("Strategy")
+        df = df.sort_values("Average Annual Return")
+
+        print("\n\n=====QUICK-SUMMARY=====")
         print(df.to_string())
         return df
 
-    def plot_results(self, show_indicators=False, log_scale=False):
+    def plot_results(self, show_indicators=False, log_scale=False, show_volume=False):
         df = self.tickers[0].get_dataframe()
         used_indicators = self.tickers[0].get_used_indicators()
 
@@ -129,10 +211,10 @@ class Simulation:
         # --- PRIMARY PLOT (ax1) ---
         ax1.plot(df.index, df["CLOSE"], label="Price", linewidth=1.5, color="black")
 
-        for result, strat_name, ticker in self.results:
+        for i, (result, strat_name, ticker) in enumerate(self.results):
             ax1.plot(
                 result.index,
-                result[strat_name],
+                result,
                 label=f"Portfolio: {strat_name}",
                 linewidth=1,
             )
