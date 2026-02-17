@@ -108,13 +108,24 @@ class Simulation:
 
             # interpret all the results for this ticker
             avg_annual_return = 0
+            avg_annual_sharp_ratio = 0
+            avg_max_drawdown = 0
             for result, name, _ in results:
-                annual_return = self.get_annual_return(result)
-                avg_annual_return += annual_return
+                # Annual return
+                avg_annual_return += self.get_annual_return(result)
+                # Annual Sharp Ratio
+                avg_annual_sharp_ratio += self.get_annual_sharpe_ratio(result)
+                # Drawdown
+                avg_max_drawdown += self.get_max_drawdown(result)
 
-            avg_annual_return = avg_annual_return / len(results)
+            num_results = len(results)
+            avg_annual_return = avg_annual_return / num_results
+            avg_annual_sharp_ratio = avg_annual_sharp_ratio / num_results
+            avg_max_drawdown = avg_max_drawdown / num_results
 
-            self.add_summary(name, avg_annual_return)
+            self.add_summary(
+                name, avg_annual_return, avg_annual_sharp_ratio, avg_max_drawdown
+            )
 
     def simulate(self, strategy, ticker):
         df = ticker.get_dataframe()
@@ -162,11 +173,53 @@ class Simulation:
 
         return annual_return
 
-    def add_summary(self, name, avg_annual_return=None):
+    def get_annual_sharpe_ratio(
+        self,
+        result,
+        risk_free_rate: float = 0.0,
+        trading_days: int = 252,
+    ):
+        if result.empty or len(result) < 2:
+            return 0
+
+        daily_returns = result["Value"].pct_change().dropna()
+
+        if daily_returns.std() == 0:
+            return 0
+
+        daily_rf = (1 + risk_free_rate) ** (1 / trading_days) - 1
+
+        excess_returns = daily_returns - daily_rf
+
+        sharpe_ratio = (excess_returns.mean() / excess_returns.std()) * (
+            trading_days**0.5
+        )
+
+        return sharpe_ratio
+
+    def get_max_drawdown(self, result):
+        if result.empty:
+            return 0.0
+
+        rolling_max = result["Value"].cummax()
+        drawdowns = (result["Value"] / rolling_max) - 1.0
+        max_drawdown = drawdowns.min()
+
+        return max_drawdown
+
+    def add_summary(
+        self,
+        name,
+        avg_annual_return=None,
+        avg_annual_sharp_ratio=None,
+        max_drawdown=None,
+    ):
         if name not in self.summary_data:
             self.summary_data[name] = {"Strategy": name}
 
         self.summary_data[name]["Average Annual Return"] = avg_annual_return
+        self.summary_data[name]["Average Sharp Ratio"] = avg_annual_sharp_ratio
+        self.summary_data[name]["Max Drawdown"] = max_drawdown
 
     def get_quick_summary(self):
         df = pd.DataFrame(list(self.summary_data.values())).set_index("Strategy")

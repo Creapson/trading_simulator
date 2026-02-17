@@ -176,9 +176,30 @@ class EMA_SLOPE_CHANGE(Strategy):
         return (df[self.ema_slope] < self.th) & (df[self.ema_slope].shift(1) >= self.th)
 
 
+class RSI_Breakout(Strategy):
+    def __init__(self, rsi=14, break_top=0.7, break_bottom=0.3):
+        self.name = (
+            "RSI_Breakout RSI:"
+            + str(rsi)
+            + " "
+            + str(break_bottom)
+            + "-"
+            + str(break_top)
+        )
+        self.top = break_top
+        self.bot = break_bottom
+        self.rsi = "RSI:" + str(rsi)
+        self._DEPENDENCIES.append(self.rsi)
+
+    def is_buy_signal(self, df):
+        return (df[self.rsi] > self.bot) & (df[self.rsi].shift(1) <= self.bot)
+
+    def is_sell_signal(self, df):
+        return (df[self.rsi] < self.top) & (df[self.rsi].shift(1) >= self.top)
+
+
 """
 class (Strategy):
-    _DEPENDENCIES = []
 
     def __init__(self):
         self.name = ""    
