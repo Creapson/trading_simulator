@@ -21,14 +21,16 @@ tickers = []
 
 
 # tickers.append(Ticker("^SPX"))
-# tckr = Ticker("MSFT")
-# tickers.append(tckr)
-tickers = load_tickers_from_file("smp_500_stocks.txt")
+tckr = Ticker("BTC-USD")
+tickers.append(tckr)
+# tickers = load_tickers_from_file("smp_500_stocks.txt")
 
 # strats.append(BuyAndHold())
 # for short in range(10, 110, 10):
 #     for long in range(100, 310, 10):
 #         strats.append(SMA_Cross(short, long))
+strats.append(SMA_Cross(10, 110))
+strats.append(SMA_Cross())
 
 # strats.append(SMA_Cross(10, 110))
 # for bot in range(10, 55, 5):
@@ -40,8 +42,8 @@ tickers = load_tickers_from_file("smp_500_stocks.txt")
 #         for thresh in range(1, 6, 1):
 #             strats.append(EMA_SLOPE_CHANGE(window, shift, thresh / 10))
 
-for window in range(0, 100, 1):
-    strats.append(MOM_ZeroCrossing(window))
+# for window in range(0, 100, 1):
+#     strats.append(MOM_ZeroCrossing(window))
 
 # strats.append(ADOSC_ZeroCrossing())
 

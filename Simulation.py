@@ -147,14 +147,15 @@ class Simulation:
             signal = signals[i]
 
             if signal == 1:
-                portfolio.buy_stock(ticker.ticker, open_prices[i])
+                portfolio.buy_stock(ticker.ticker, open_prices[i], dates[i])
             elif signal == -1:
-                portfolio.sell_stock(ticker.ticker, open_prices[i])
+                portfolio.sell_stock(ticker.ticker, open_prices[i], dates[i])
 
             portfolio_value = portfolio.get_value(ticker.ticker, close_prices[i])
             values.append(portfolio_value)
 
         result = pd.DataFrame({"Value": values}, index=dates)
+        portfolio.print_trade_history()
         return result, strategy.name
 
     def get_annual_return(
