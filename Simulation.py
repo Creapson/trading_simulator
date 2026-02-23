@@ -11,10 +11,10 @@ from Ticker import Ticker
 class Simulation:
     def __init__(
         self,
-        strategys: [Strategy] = [],
-        tickers: [Ticker] = [],
-        start_date: str = None,
-        end_date: str = None,
+        strategys: list[Strategy] = [],
+        tickers: list[Ticker] = [],
+        start_date: str = "",
+        end_date: str = "",
     ):
         self.strategys = strategys
         self.tickers = tickers
@@ -31,11 +31,12 @@ class Simulation:
             indicators.update(strategy.get_dependencies())
         indicator_list = list(indicators)
         success = ticker.add_indicators(indicator_list)
-        ticker.dropna()
+        # ticker.dropna()
         return success
 
     def set_timespan(self, start, end):
-        self.ticker.set_timespan(start_time=start)
+        self.start_date = start
+        self.end_date = end
 
     def start(self, show_progress=True):
         def printProgressBar(
@@ -133,29 +134,30 @@ class Simulation:
             return pd.Series(dtype="float64"), strategy.name
 
         signals = strategy.evaluate(df)
-        signals = signals.reindex(df.index).fillna(0).shift(1).to_numpy()
+        signals = signals.shift(1).fillna(0).to_numpy()
 
         open_prices = df["OPEN"].to_numpy()
         close_prices = df["CLOSE"].to_numpy()
         dates = df.index
 
         portfolio = Portfolio(cash=close_prices[0])
-
         values = []
 
         for i in range(len(df)):
             signal = signals[i]
 
             if signal == 1:
-                portfolio.buy_stock(ticker.ticker, open_prices[i], dates[i])
+                portfolio.close_position(ticker.ticker, open_prices[i], dates[i])
+                portfolio.long_stock(ticker.ticker, open_prices[i], dates[i])
+
             elif signal == -1:
-                portfolio.sell_stock(ticker.ticker, open_prices[i], dates[i])
+                portfolio.close_position(ticker.ticker, open_prices[i], dates[i])
+                portfolio.short_stock(ticker.ticker, open_prices[i], dates[i])
 
             portfolio_value = portfolio.get_value(ticker.ticker, close_prices[i])
             values.append(portfolio_value)
 
         result = pd.DataFrame({"Value": values}, index=dates)
-        portfolio.print_trade_history()
         return result, strategy.name
 
     def get_annual_return(
@@ -232,7 +234,7 @@ class Simulation:
 
     def plot_results(self, show_indicators=False, log_scale=False, show_volume=False):
         df = self.tickers[0].get_dataframe()
-        used_indicators = self.tickers[0].get_used_indicators()
+        used_indicators = self.tickers[0].get_indicators()
 
         # Determine if we need a secondary plot
         # Logic: If show_indicators is True and there's at least one non-overlay indicator

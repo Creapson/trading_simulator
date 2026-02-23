@@ -22,6 +22,8 @@ CHART_OVERLAYS = {
     "BB_LOWER",
     "BB_MIDDLE",
     "SAR",
+    "MAX",
+    "MIN",
 }
 
 INDICATOR_DEPENDENCIES = {
@@ -101,7 +103,7 @@ class Ticker:
     def get_dataframe(self):
         return self.df
 
-    def get_used_indicators(self):
+    def get_indicators(self):
         return self.indicator_list
 
     def set_timespan(self, start_time=None, end_time=None):
@@ -178,6 +180,7 @@ class Ticker:
                 continue
 
             try:
+                print(ind)
                 self.calc_indicator(ind)
                 # print("Calcualted Indicator: ", ind)
                 self.indicator_list.append(ind)
@@ -190,15 +193,13 @@ class Ticker:
     def add_indicators(self, indicators: list[str], force: bool = False):
         for ind in indicators:
             succes = self.add_indicator(ind, force=force)
+            print(succes)
             if not succes:
                 return False
         return True
 
     def dropna(self):
         self.df.dropna()
-
-    def _indicator_demux(self, indicator):
-        pass
 
     def calc_indicator(self, indicator_name: str):
         ind_split = indicator_name.split(":")
@@ -333,6 +334,11 @@ class Ticker:
             case "SAR":
                 return self.add_sar()
 
+            # Max and Mins
+            case "MAX":
+                return self.add_max(ind_params[0])
+            case "MIN":
+                return self.add_min(ind_params[0])
             # Fallback
             case _:
                 raise ValueError(f"Indicator {indicator_name} not recognized.")
@@ -776,3 +782,9 @@ class Ticker:
                     af = af_step
 
         self.df["SAR"] = sar
+
+    def add_max(self, window):
+        self.df["MAX:" + str(window)] = self.df["HIGH"].rolling(window=window).max()
+
+    def add_min(self, window):
+        self.df["MIN:" + str(window)] = self.df["LOW"].rolling(window=window).min()

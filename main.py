@@ -21,21 +21,20 @@ tickers = []
 
 
 # tickers.append(Ticker("^SPX"))
-tckr = Ticker("BTC-USD")
-tickers.append(tckr)
-# tickers = load_tickers_from_file("smp_500_stocks.txt")
+tickers = load_tickers_from_file("smp_500_stocks.txt")
 
 # strats.append(BuyAndHold())
 # for short in range(10, 110, 10):
 #     for long in range(100, 310, 10):
 #         strats.append(SMA_Cross(short, long))
-strats.append(SMA_Cross(10, 110))
-strats.append(SMA_Cross())
+# for window in range(0, 30, 3):
+#     for dd in range(0, 50, 5):
+#         strats.append(SMA_Cross_StopLoss(10, 110, window, dd / 100))
 
 # strats.append(SMA_Cross(10, 110))
-# for bot in range(10, 55, 5):
-#     for top in range(55, 100, 5):
-#         strats.append(RSI_Breakout(break_bottom=bot / 100.0, break_top=top / 100.0))
+for bot in range(10, 55, 10):
+    for top in range(55, 100, 10):
+        strats.append(RSI_Breakout(break_bottom=bot / 100.0, break_top=top / 100.0))
 
 # for window in range(10, 100, 10):
 #     for shift in range(0, 4, 1):

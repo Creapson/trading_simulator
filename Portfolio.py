@@ -1,36 +1,11 @@
-import pandas as pd
 
+import pandas as pd
 
 class Portfolio:
     def __init__(self, cash=0):
         self._cash = cash
-        self._stocks = {}
+        self._stocks = {}  # Ticker: [Anzahl, Durchschnittspreis]
         self.trade_history = []
-
-    def get_stocks(self):
-        return self._stocks
-
-    def get_cash(self):
-        return self._cash
-
-    def add_stock(self, ticker, price, num_stocks):
-        num_stocks_old, avg_price_old = self._stocks.get(ticker, (0, 0))
-        num_stocks_new = num_stocks_old + num_stocks
-        avg_price_new = (
-            num_stocks_old * avg_price_old + num_stocks * price
-        ) / num_stocks_new
-
-        self._stocks[ticker] = (num_stocks_new, avg_price_new)
-        pass
-
-    def remove_stock(self, ticker, num_stocks):
-        num_stocks_old, avg_buy_price = self._stocks.get(ticker, (0, 0))
-
-        if num_stocks_old < num_stocks:
-            return 0
-
-        self._stocks[ticker] = (num_stocks_old - num_stocks), avg_buy_price
-        return avg_buy_price
 
     def get_value(self, ticker, close_price):
         value = self._cash
@@ -41,53 +16,59 @@ class Portfolio:
 
         return value
 
-    def buy_stock(self, ticker, price, date, allocation=1):
-        num_stocks = (self._cash * allocation) / price
-        self.add_trade(num_stocks, ticker, date, True, price)
+    def long_stock(self, ticker, price, date, allocation=1.0):
+        if self._cash <= 0: return
+        
+        amount_to_spend = self._cash * allocation
+        num_stocks = amount_to_spend / price
+        
+        self._cash -= amount_to_spend
+        self._add_stock_to_inventory(ticker, price, num_stocks)
+        self._record_trade(date, "Long", ticker, num_stocks, price)
 
-    def sell_stock(self, ticker, price, date, allocation=1):
-        num_stocks_current, _ = self._stocks.get(ticker, (0, 0))
-        num_stocks = num_stocks_current * allocation
-        self.add_trade(num_stocks, ticker, date, False, price)
+    def short_stock(self, ticker, price, date, allocation=1.0):
+        notional_value = self._cash * allocation
+        num_stocks = notional_value / price
+        
+        self._cash += (num_stocks * price)
+        self._add_stock_to_inventory(ticker, price, -num_stocks)
+        self._record_trade(date, "Short", ticker, num_stocks, price)
 
-    def add_trade(self, num_stocks, ticker, date, is_long, price):
-        # Buy
-        if is_long:
-            if self._cash <= 0:
-                return
+    def close_position(self, ticker, price, date):
+        num_stocks, avg_buy_price = self._stocks.get(ticker, (0, 0))
+        if num_stocks == 0: return
 
-            self._cash -= num_stocks * price
-            self.add_stock(ticker, price, num_stocks)
-            profit = 0
-
-        # Sell
+        if num_stocks > 0:
+            performance = (price / avg_buy_price) - 1
+            self._cash += (num_stocks * price)
         else:
-            num_stocks, _ = self._stocks.get(ticker, (0, 0))
+            performance = (avg_buy_price - price) / avg_buy_price
+            self._cash += (num_stocks * price) 
 
-            avg_price = self.remove_stock(ticker, num_stocks)
-            earnings = price * num_stocks
-            self._cash += earnings
+        self._stocks[ticker] = (0, 0)
+        self._record_trade(date, "Close", ticker, abs(num_stocks), price, performance)
 
-            profit = price / avg_price
+    def _add_stock_to_inventory(self, ticker, price, num_stocks):
+        num_old, avg_old = self._stocks.get(ticker, (0, 0))
+        num_new = num_old + num_stocks
+        
+        if num_new == 0:
+            avg_new = 0
+        else:
+            avg_new = (abs(num_old) * avg_old + abs(num_stocks) * price) / abs(num_new)
+        
+        self._stocks[ticker] = (num_new, avg_new)
 
-        trade_type = "Buy" if is_long else "Sell"
-        stocks_remaining, _ = self._stocks.get(ticker, (0, 0))
-
-        self.trade_history.append(
-            {
-                "Date": date,
-                "Type": trade_type,
-                "Ticker": ticker,
-                "Num Stocks": num_stocks,
-                "Remaining": stocks_remaining,
-                "Price": price,
-                "Profit": profit,
-            }
-        )
+    def _record_trade(self, date, t_type, ticker, num, price, perf=0):
+        self.trade_history.append({
+            "Date": date,
+            "Type": t_type,
+            "Ticker": ticker,
+            "Shares": round(num, 4),
+            "Price": round(price, 2),
+            "Performance": f"{perf:.2%}",
+            "Portfolio_Cash": round(self._cash, 2)
+        })
 
     def print_trade_history(self):
-        df = pd.DataFrame(self.trade_history)
-        print(df)
-
-    def get_trade_history(self):
-        return self.trade_history
+        print(pd.DataFrame(self.trade_history))
