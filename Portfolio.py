@@ -7,6 +7,19 @@ class Portfolio:
         self._stocks = {}  # Ticker: [Anzahl, Durchschnittspreis]
         self.trade_history = []
 
+    def add_cash(self, amount):
+        self._cash  += amount
+
+    def add_dividend(self, ticker, payout):
+        num_stocks, _ = self._stocks.get(ticker, (0, 0))
+        self.add_cash(num_stocks * payout)
+
+    def add_stock_split(self, ticker, factor):
+        num_stocks, avg_buy_price = self._stocks.get(ticker, (0, 0))
+        num_stocks_new = num_stocks * factor
+        avg_buy_price_new = avg_buy_price / factor
+        self._stocks[ticker] = (num_stocks_new, avg_buy_price_new)
+
     def get_value(self, ticker, close_price):
         value = self._cash
 

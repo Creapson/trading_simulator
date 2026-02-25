@@ -38,10 +38,10 @@ class Strategy:
         pass
 
 
-class BuyAndHold(Strategy):
+class HoldAndReinvest(Strategy):
     def __init__(self):
         super().__init__()
-        self.name = "Buy and Hold"
+        self.name = "HoldAndReinvest"
 
     def is_long_signal(self, df):
         return pd.Series(True, index=df.index)

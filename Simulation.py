@@ -1,5 +1,6 @@
 import time
 
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -78,7 +79,7 @@ class Simulation:
 
         # precalc all indicators for the tickers
         for ticker in self.tickers:
-            print(f"Calculating indicators for: {ticker.ticker}")
+            print(f"Calculating indicators for: {ticker.name}")
             loaded = self.calc_indicators(ticker)
             if not loaded:
                 print(f"\nTicker {ticker} not loaded properly. Skipping...")
@@ -129,7 +130,7 @@ class Simulation:
             )
 
     def simulate(self, strategy, ticker):
-        df = ticker.get_dataframe()
+        df = ticker.get_history()
         if df.empty:
             return pd.Series(dtype="float64"), strategy.name
 
@@ -138,6 +139,7 @@ class Simulation:
 
         open_prices = df["OPEN"].to_numpy()
         close_prices = df["CLOSE"].to_numpy()
+        dividends = df["DIVIDENDS"].to_numpy()
         dates = df.index
 
         portfolio = Portfolio(cash=close_prices[0])
@@ -147,18 +149,27 @@ class Simulation:
             signal = signals[i]
 
             if signal == 1:
-                portfolio.close_position(ticker.ticker, open_prices[i], dates[i])
-                portfolio.long_stock(ticker.ticker, open_prices[i], dates[i])
+                portfolio.close_position(ticker.name, open_prices[i], dates[i])
+                portfolio.long_stock(ticker.name, open_prices[i], dates[i])
 
             elif signal == -1:
-                portfolio.close_position(ticker.ticker, open_prices[i], dates[i])
-                portfolio.short_stock(ticker.ticker, open_prices[i], dates[i])
+                portfolio.close_position(ticker.name, open_prices[i], dates[i])
+                portfolio.short_stock(ticker.name, open_prices[i], dates[i])
 
-            portfolio_value = portfolio.get_value(ticker.ticker, close_prices[i])
+            portfolio.add_dividend(ticker.name, dividends[i])
+
+            portfolio_value = portfolio.get_value(ticker.name, close_prices[i])
             values.append(portfolio_value)
 
+        portfolio.print_trade_history()
         result = pd.DataFrame({"Value": values}, index=dates)
         return result, strategy.name
+
+    def fix_num(self, number, default=0): 
+        if np.isnan(number) or not np.isfinite(number): 
+            return 0
+        else:
+            return number 
 
     def get_annual_return(
         self,
@@ -174,7 +185,7 @@ class Simulation:
 
         annual_return = (end_price / start_price) ** (1 / num_years) - 1
 
-        return annual_return
+        return self.fix_num(annual_return)
 
     def get_annual_sharpe_ratio(
         self,
@@ -198,7 +209,7 @@ class Simulation:
             trading_days**0.5
         )
 
-        return sharpe_ratio
+        return self.fix_num(sharpe_ratio)
 
     def get_max_drawdown(self, result):
         if result.empty:
@@ -208,7 +219,7 @@ class Simulation:
         drawdowns = (result["Value"] / rolling_max) - 1.0
         max_drawdown = drawdowns.min()
 
-        return max_drawdown
+        return self.fix_num(max_drawdown, 1)
 
     def add_summary(
         self,
@@ -233,7 +244,7 @@ class Simulation:
         return df
 
     def plot_results(self, show_indicators=False, log_scale=False, show_volume=False):
-        df = self.tickers[0].get_dataframe()
+        df = self.tickers[0].get_history()
         used_indicators = self.tickers[0].get_indicators()
 
         # Determine if we need a secondary plot
