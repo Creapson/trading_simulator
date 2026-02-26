@@ -335,6 +335,13 @@ class Ticker:
                 return self.add_max(ind_params[0])
             case "MIN":
                 return self.add_min(ind_params[0])
+
+            # Fundamental Analyse 
+            case "DIV_YIELD":
+                return self.add_div_yield()            
+            case "DIV_GROWTH":
+                return self.add_div_growth(ind_params[0])
+            
             # Fallback
             case _:
                 raise ValueError(f"Indicator {indicator_name} not recognized.")
@@ -784,3 +791,13 @@ class Ticker:
 
     def add_min(self, window):
         self.history["MIN:" + str(window)] = self.history["LOW"].rolling(window=window).min()
+
+    def add_div_yield(self):
+        annual_dividends = self.history["DIVIDENDS"].rolling(window=252).sum()
+        self.history["DIV_YIELD"] = annual_dividends / self.history["CLOSE"]
+
+    def add_div_growth(self, years=5):
+        annual_div = self.history["DIVIDENDS"].groupby(self.history.index.year).sum()
+        annual_growth = annual_div.pct_change()
+        avg_growth = annual_growth.rolling(window=years).mean()
+        self.history[f"DIV_GROWTH:{years}"] = self.history.index.year.map(avg_growth)

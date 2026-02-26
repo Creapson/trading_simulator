@@ -19,8 +19,9 @@ def load_tickers_from_file(filename, max_num=99999):
 strats = []
 tickers = []
 
-
-tickers.append(Ticker("MSFT"))
+msft = Ticker("RY6.SG")
+msft.add_indicators(["DIV_YIELD", "DIV_GROWTH:5"])
+tickers.append(msft)
 # tickers = load_tickers_from_file("smp_500_stocks.txt")
 # strats.append(RSI_Breakout())
 
