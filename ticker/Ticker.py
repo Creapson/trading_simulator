@@ -23,20 +23,17 @@ CHART_OVERLAYS = {
     "BB_LOWER",
     "BB_MIDDLE",
     "SAR",
+    "MAX",
+    "MIN",
 }
 
-@dataclass
-class Ticker:
-    ticker: str
-    name: str = ""
-    desc: str = ""
 
-    def __init__(self, ticker, name="", desc=""):
-        self.yf_ticker = yf.Ticker(ticker)
-        self.ticker = ticker
-        self.name = name
-        self.desc = desc
-        self.df: pd.DataFrame = None
+class Ticker:
+    def __init__(self, ticker):
+        self.ticker = yf.Ticker(ticker)
+        self.name = ticker
+        self.history = pd.DataFrame()
+        self.financials = pd.DataFrame()
 
         self.is_loaded = False
         self.can_load_ticker = True
@@ -62,14 +59,14 @@ class Ticker:
             self.can_load_ticker = True
 
     def load_financials(self):
-        print(self.yf_ticker.get_financials(freq="quarterly"))
-        print(self.yf_ticker.get_fast_info())
-        print(self.yf_ticker.get_earnings_history())
+        print(self.ticker.get_financials(freq="quarterly"))
+        print(self.ticker.get_fast_info())
+        print(self.ticker.get_earnings_history())
 
-    def get_dataframe(self):
-        return self.df
+    def get_history(self):
+        return self.history
 
-    def get_used_indicators(self):
+    def get_indicators(self):
         return self.indicator_list
 
     def set_timespan(self, start_time=None, end_time=None):
@@ -77,46 +74,52 @@ class Ticker:
             if start_time is None and end_time is None:
                 return
             elif end_time is None:
-                self.df = self.df.loc[start_time:]
+                self.history = self.history.loc[start_time:]
             else:
-                self.df = self.df.loc[:end_time]
+                self.history = self.history.loc[:end_time]
         except Exception:
             print("Failed to slice Ticker!")
 
     def history_from_file(self):
         try:
-            self.df = pd.read_csv(
-                "data/ticker/history/" + self.ticker + ".csv",
+            self.history = pd.read_csv(
+                "data/ticker/history/" + self.name + ".csv",
                 parse_dates=["Date"],
                 index_col="Date",
             )
-            print(f"Loaded Ticker {self.ticker} from file!")
+            print(f"Loaded Ticker {self.name} from file!")
             return True
         except Exception:
-            print(f"Failed to read {self.ticker} from file!")
+            print(f"Failed to read {self.name} from file!")
             return False
 
     def history_from_yf(self):
         print("Downloading Ticker from Yahoo-Finance!")
         try:
-            self.df = yf.download(self.ticker, period="max", interval="1d")
+            # self.history = yf.download(self.name, period="max", interval="1d")
+            self.history = self.ticker.history(period="max", interval="1d", auto_adjust=False)
+
+            self.history.index = self.history.index.tz_localize(None)
+            self.history.index = pd.to_datetime(self.history.index)
 
             # Download failed or returned no data
-            if self.df is None or self.df.empty:
+            if self.history is None or self.history.empty:
                 print("Download failed: no data returned.")
                 return False
 
             # 1️⃣ Flatten columns
-            if isinstance(self.df.columns, pd.MultiIndex):
-                self.df.columns = self.df.columns.get_level_values(0)
+            if isinstance(self.history.columns, pd.MultiIndex):
+                self.history.columns = self.history.columns.get_level_values(0)
 
-            self.df.columns = self.df.columns.str.upper()
+            self.history.columns = self.history.columns.str.upper()
 
-            self.df.index = pd.to_datetime(self.df.index)
-            self.df = self.df.sort_index()
+            print(self.history)
+            self.history = self.history.drop(columns=["ADJ CLOSE", "STOCK SPLITS"])
+            print(self.history)
 
-            self.df.to_csv("data/ticker/history/" + self.ticker + ".csv")
-            print(f"Saved {self.ticker}.csv")
+
+            self.history.to_csv("data/ticker/history/" + self.name + ".csv")
+            print(f"Saved {self.name}.csv")
             return True
 
         except Exception as e:
@@ -125,11 +128,11 @@ class Ticker:
 
     def print_info(self):
         # Display basic info
-        print(f"Dataset shape: {self.df.shape}")
-        print(f"Date range: {self.df.index.min()} to {self.df.index.max()}")
-        print(f"\nFirst few rows:\n{self.df}")
+        print(f"Dataset shape: {self.history.shape}")
+        print(f"Date range: {self.history.index.min()} to {self.history.index.max()}")
+        print(f"\nFirst few rows:\n{self.history}")
 
-        print(self.df.columns)
+        print(self.history.columns)
 
     def add_indicator(self, indicator: str, force: bool = False):
         if not self.can_load_ticker:
@@ -159,13 +162,7 @@ class Ticker:
         return True
 
     def dropna(self):
-        self.df.dropna()
-
-    def keep(self, columns: List[str]):
-        self.df = self.df.filter(columns)
-
-    def _indicator_demux(self, indicator):
-        pass
+        self.history.dropna()
 
     def calc_indicator(self, indicator_name: str):
         ind_split = indicator_name.split(":")
@@ -301,6 +298,18 @@ class Ticker:
             case "SAR":
                 return self.add_sar()
 
+            # Max and Mins
+            case "MAX":
+                return self.add_max(ind_params[0])
+            case "MIN":
+                return self.add_min(ind_params[0])
+
+            # Fundamental Analyse 
+            case "DIV_YIELD":
+                return self.add_div_yield()            
+            case "DIV_GROWTH":
+                return self.add_div_growth(ind_params[0])
+            
             # Fallback
             case _:
                 raise ValueError(f"Indicator {indicator_name} not recognized.")
@@ -334,67 +343,67 @@ class Ticker:
 
     # Simple Moving Averages
     def add_sma_close(self, days):
-        self.df["SMA_CLOSE:" + str(days)] = self.df["CLOSE"].rolling(window=days).mean()
+        self.history["SMA_CLOSE:" + str(days)] = self.history["CLOSE"].rolling(window=days).mean()
 
     def add_sma_high(self, days):
-        self.df["SMA_HIGH:" + str(days)] = self.df["HIGH"].rolling(window=days).mean()
+        self.history["SMA_HIGH:" + str(days)] = self.history["HIGH"].rolling(window=days).mean()
 
     def add_sma_low(self, days):
-        self.df["SMA_LOW:" + str(days)] = self.df["LOW"].rolling(window=days).mean()
+        self.history["SMA_LOW:" + str(days)] = self.history["LOW"].rolling(window=days).mean()
 
     def add_sma_open(self, days):
-        self.df["SMA_OPEN:" + str(days)] = self.df["OPEN"].rolling(window=days).mean()
+        self.history["SMA_OPEN:" + str(days)] = self.history["OPEN"].rolling(window=days).mean()
 
     def add_sma_slope(self, days, shift):
         sma = "SMA_CLOSE:" + str(days)
         self.add_indicator(sma)
         sma_slope = "SMA_SLOPE:" + str(days) + "_" + str(shift)
-        self.df[sma_slope] = ((self.df[sma] / self.df[sma].shift(shift)) - 1) * days
+        self.history[sma_slope] = ((self.history[sma] / self.history[sma].shift(shift)) - 1) * days
 
     # Exponential Moving Averages
     def add_ema(self, days):
-        self.df["EMA:" + str(days)] = (
-            self.df["CLOSE"].ewm(span=days, adjust=False).mean()
+        self.history["EMA:" + str(days)] = (
+            self.history["CLOSE"].ewm(span=days, adjust=False).mean()
         )
 
     def add_ema_slope(self, days, shift):
         ema = "EMA:" + str(days)
         self.add_indicator(ema)
         ema_slope = "EMA_SLOPE:" + str(days) + "_" + str(shift)
-        self.df[ema_slope] = ((self.df[ema] / self.df[ema].shift(shift)) - 1) * days
+        self.history[ema_slope] = ((self.history[ema] / self.history[ema].shift(shift)) - 1) * days
 
     # Weighted Moving Averages
     def add_wma(self, period):
         weights = np.arange(1, period + 1)
-        self.df["WMA:" + str(period)] = (
-            self.df["CLOSE"]
+        self.history["WMA:" + str(period)] = (
+            self.history["CLOSE"]
             .rolling(period)
             .apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
         )
 
     # Double Exponential Moving Average
     def add_dema(self, period):
-        ema = self.df["CLOSE"].ewm(span=period, adjust=False).mean()
+        ema = self.history["CLOSE"].ewm(span=period, adjust=False).mean()
         ema_ema = ema.ewm(span=period, adjust=False).mean()
-        self.df["DEMA:" + str(period)] = 2 * ema - ema_ema
+        self.history["DEMA:" + str(period)] = 2 * ema - ema_ema
 
     # Triple Exponential Moving Average
 
     def add_tema(self, period):
-        ema1 = self.df["CLOSE"].ewm(span=period, adjust=False).mean()
+        ema1 = self.history["CLOSE"].ewm(span=period, adjust=False).mean()
         ema2 = ema1.ewm(span=period, adjust=False).mean()
         ema3 = ema2.ewm(span=period, adjust=False).mean()
-        self.df["TEMA:" + str(period)] = 3 * (ema1 - ema2) + ema3
+        self.history["TEMA:" + str(period)] = 3 * (ema1 - ema2) + ema3
 
     # Triangular Moving Average
     def add_trima(self, period):
-        self.df["TRIMA:" + str(period)] = (
-            self.df["CLOSE"].rolling(window=period).mean().rolling(window=period).mean()
+        self.history["TRIMA:" + str(period)] = (
+            self.history["CLOSE"].rolling(window=period).mean().rolling(window=period).mean()
         )
 
     # Kaufman Adaptive Moving Average
     def add_kama_20(self, fast=2, slow=30):
-        close = self.df["CLOSE"]
+        close = self.history["CLOSE"]
 
         change = close.diff(20).abs()
         volatility = close.diff().abs().rolling(20).sum()
@@ -410,11 +419,11 @@ class Ticker:
         for i in range(20, len(close)):
             kama[i] = kama[i - 1] + sc.iloc[i] * (close.iloc[i] - kama[i - 1])
 
-        self.df["KAMA_20"] = kama
+        self.history["KAMA_20"] = kama
 
     # T3 Moving Average
     def add_t3_5(self, v=0.7):
-        close = self.df["CLOSE"]
+        close = self.history["CLOSE"]
 
         e1 = close.ewm(span=5, adjust=False).mean()
         e2 = e1.ewm(span=5, adjust=False).mean()
@@ -428,14 +437,14 @@ class Ticker:
         c3 = -6 * v**2 - 3 * v - 3 * v**3
         c4 = 1 + 3 * v + v**2 + v**3
 
-        self.df["T3_5"] = c1 * e6 + c2 * e5 + c3 * e4 + c4 * e3
+        self.history["T3_5"] = c1 * e6 + c2 * e5 + c3 * e4 + c4 * e3
 
     # MOMENTUM INDICATORS
 
     # Relative Strength Index
 
     def add_rsi(self, period):
-        delta = self.df["CLOSE"].diff()
+        delta = self.history["CLOSE"].diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
 
@@ -443,15 +452,15 @@ class Ticker:
         avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
 
         rs = avg_gain / avg_loss
-        self.df["RSI:" + str(period)] = 1 - (1 / (1 + rs))
+        self.history["RSI:" + str(period)] = 1 - (1 / (1 + rs))
 
     # Momentum
     def add_mom(self, past):
-        self.df["MOM:" + str(past)] = self.df["CLOSE"].diff(past)
+        self.history["MOM:" + str(past)] = self.history["CLOSE"].diff(past)
 
     # Rate of Change
     def add_roc(self, past):
-        self.df["ROC:" + str(past)] = self.df["CLOSE"].pct_change(past)
+        self.history["ROC:" + str(past)] = self.history["CLOSE"].pct_change(past)
 
     # Moving Average Convergence Divergence
     def add_macd(self):
@@ -468,9 +477,9 @@ class Ticker:
 
     # Stochastik Socillator
     def add_stoch_fastk(self, period=14):
-        low = self.df["LOW"].rolling(period).min()
-        high = self.df["HIGH"].rolling(period).max()
-        self.df["STOCH_FASTK"] = 1 * (self.df["CLOSE"] - low) / (high - low)
+        low = self.history["LOW"].rolling(period).min()
+        high = self.history["HIGH"].rolling(period).max()
+        self.history["STOCH_FASTK"] = 1 * (self.history["CLOSE"] - low) / (high - low)
 
     def add_stoch_fastd(self):
         self.add_indicator("STOCH_FASTK")
@@ -490,7 +499,7 @@ class Ticker:
         rsi = self.df["RSI:14"]
         min_rsi = rsi.rolling(period).min()
         max_rsi = rsi.rolling(period).max()
-        self.df["STOCHRSI_FASTK"] = 1 * (rsi - min_rsi) / (max_rsi - min_rsi)
+        self.history["STOCHRSI_FASTK"] = 1 * (rsi - min_rsi) / (max_rsi - min_rsi)
 
     def add_stochrsi_fastd(self):
         self.add_indicator("STOCH_FASTK")
@@ -498,28 +507,28 @@ class Ticker:
 
     # Commodity Channel Index
     def _cci(self, period):
-        tp = (self.df["HIGH"] + self.df["LOW"] + self.df["CLOSE"]) / 3
+        tp = (self.history["HIGH"] + self.history["LOW"] + self.history["CLOSE"]) / 3
         sma = tp.rolling(period).mean()
         mad = (tp - sma).abs().rolling(period).mean()
         return (tp - sma) / (0.015 * mad)
 
     def add_cci_14(self):
-        self.df["CCI_14"] = self._cci(14)
+        self.history["CCI_14"] = self._cci(14)
 
     def add_cci_20(self):
-        self.df["CCI_20"] = self._cci(20)
+        self.history["CCI_20"] = self._cci(20)
 
     # Chande Momentum Oscillator
     def add_cmo_14(self):
-        delta = self.df["CLOSE"].diff()
+        delta = self.history["CLOSE"].diff()
         gain = delta.clip(lower=0).rolling(14).sum()
         loss = -delta.clip(upper=0).rolling(14).sum()
-        self.df["CMO_14"] = 1 * (gain - loss) / (gain + loss)
+        self.history["CMO_14"] = 1 * (gain - loss) / (gain + loss)
 
     def add_willr_14(self):
-        high = self.df["HIGH"].rolling(14).max()
-        low = self.df["LOW"].rolling(14).min()
-        self.df["WILLR_14"] = -1 * (high - self.df["CLOSE"]) / (high - low)
+        high = self.history["HIGH"].rolling(14).max()
+        low = self.history["LOW"].rolling(14).min()
+        self.history["WILLR_14"] = -1 * (high - self.history["CLOSE"]) / (high - low)
 
     # Percentage Price Oscillator
     def add_ppo(self):
@@ -533,15 +542,15 @@ class Ticker:
 
     # Balance of Power
     def add_bop(self):
-        self.df["BOP"] = (self.df["CLOSE"] - self.df["OPEN"]) / (
-            self.df["HIGH"] - self.df["LOW"]
+        self.history["BOP"] = (self.history["CLOSE"] - self.history["OPEN"]) / (
+            self.history["HIGH"] - self.history["LOW"]
         )
 
     # Ultimate Oscillator
     def add_ultosc(self):
-        close = self.df["CLOSE"]
-        low = self.df["LOW"]
-        high = self.df["HIGH"]
+        close = self.history["CLOSE"]
+        low = self.history["LOW"]
+        high = self.history["HIGH"]
 
         bp = close - np.minimum(low, close.shift(1))
         tr = np.maximum(high, close.shift(1)) - np.minimum(low, close.shift(1))
@@ -550,22 +559,22 @@ class Ticker:
         avg14 = bp.rolling(14).sum() / tr.rolling(14).sum()
         avg28 = bp.rolling(28).sum() / tr.rolling(28).sum()
 
-        self.df["ULTOSC"] = 1 * (4 * avg7 + 2 * avg14 + avg28) / 7
+        self.history["ULTOSC"] = 1 * (4 * avg7 + 2 * avg14 + avg28) / 7
 
     # VOLUME INDUCATOR
 
     # Accumulation/Distribution
     def add_ad(self):
-        high = self.df["HIGH"]
-        low = self.df["LOW"]
-        close = self.df["CLOSE"]
-        volume = self.df["VOLUME"]
+        high = self.history["HIGH"]
+        low = self.history["LOW"]
+        close = self.history["CLOSE"]
+        volume = self.history["VOLUME"]
 
         mfm = ((close - low) - (high - close)) / (high - low)
         mfm = mfm.replace([np.inf, -np.inf], 0).fillna(0)
 
         mfv = mfm * volume
-        self.df["AD"] = mfv.cumsum()
+        self.history["AD"] = mfv.cumsum()
 
     # Chaikin A/D Oscillator
     def add_adosc(self, fast=3, slow=10):
@@ -573,19 +582,19 @@ class Ticker:
         ad = self.df["AD"]
         ema_fast = ad.ewm(span=fast, adjust=False).mean()
         ema_slow = ad.ewm(span=slow, adjust=False).mean()
-        self.df["ADOSC"] = ema_fast - ema_slow
+        self.history["ADOSC"] = ema_fast - ema_slow
 
     # On-Balance Volume
     def add_obv(self):
-        direction = np.sign(self.df["CLOSE"].diff()).fillna(0)
-        self.df["OBV"] = (direction * self.df["VOLUME"]).cumsum()
+        direction = np.sign(self.history["CLOSE"].diff()).fillna(0)
+        self.history["OBV"] = (direction * self.history["VOLUME"]).cumsum()
 
     # Money Flow Index
     def add_mfi_14(self):
-        high = self.df["HIGH"]
-        low = self.df["LOW"]
-        close = self.df["CLOSE"]
-        volume = self.df["VOLUME"]
+        high = self.history["HIGH"]
+        low = self.history["LOW"]
+        close = self.history["CLOSE"]
+        volume = self.history["VOLUME"]
 
         typical_price = (high + low + close) / 3
         money_flow = typical_price * volume
@@ -598,18 +607,18 @@ class Ticker:
         neg_sum = negative_flow.rolling(14).sum()
 
         mfr = pos_sum / neg_sum
-        self.df["MFI_14"] = 1 - (1 / (1 + mfr))
+        self.history["MFI_14"] = 1 - (1 / (1 + mfr))
 
     # VOLATILITY INDICATORS
     # Typical Price
     def add_typprice(self):
-        self.df["TYPPRICE"] = (self.df["HIGH"] + self.df["LOW"] + self.df["CLOSE"]) / 3
+        self.history["TYPPRICE"] = (self.history["HIGH"] + self.history["LOW"] + self.history["CLOSE"]) / 3
 
     # True Range
     def add_trange(self):
-        high = self.df["HIGH"]
-        low = self.df["LOW"]
-        prev_close = self.df["CLOSE"].shift(1)
+        high = self.history["HIGH"]
+        low = self.history["LOW"]
+        prev_close = self.history["CLOSE"].shift(1)
 
         tr = pd.concat(
             [
@@ -620,7 +629,7 @@ class Ticker:
             axis=1,
         ).max(axis=1)
 
-        self.df["TRANGE"] = tr
+        self.history["TRANGE"] = tr
 
     # Average True Range
     def add_atr_14(self):
@@ -635,7 +644,7 @@ class Ticker:
 
     # Bollinger Bands
     def add_bb_middle(self):
-        self.df["BB_MIDDLE"] = self.df["CLOSE"].rolling(20).mean()
+        self.history["BB_MIDDLE"] = self.history["CLOSE"].rolling(20).mean()
 
     def add_bb_upper(self, std_mult=2):
         self.add_indicator("BB_MIDDLE")
@@ -651,20 +660,20 @@ class Ticker:
 
     # Directional Indicators
     def add_plus_dm(self):
-        up_move = self.df["HIGH"].diff()
-        down_move = -self.df["LOW"].diff()
+        up_move = self.history["HIGH"].diff()
+        down_move = -self.history["LOW"].diff()
 
-        self.df["PLUS_DM"] = np.where(
+        self.history["PLUS_DM"] = np.where(
             (up_move > down_move) & (up_move > 0),
             up_move,
             0.0,
         )
 
     def add_minus_dm(self):
-        up_move = self.df["HIGH"].diff()
-        down_move = -self.df["LOW"].diff()
+        up_move = self.history["HIGH"].diff()
+        down_move = -self.history["LOW"].diff()
 
-        self.df["MINUS_DM"] = np.where(
+        self.history["MINUS_DM"] = np.where(
             (down_move > up_move) & (down_move > 0),
             down_move,
             0.0,
@@ -678,7 +687,7 @@ class Ticker:
         tr_smooth = tr.ewm(alpha=1 / 14, adjust=False).mean()
         dm_smooth = plus_dm.ewm(alpha=1 / 14, adjust=False).mean()
 
-        self.df["PLUS_DI_14"] = 1 * dm_smooth / tr_smooth
+        self.history["PLUS_DI_14"] = 1 * dm_smooth / tr_smooth
 
     def add_minus_di_14(self):
         self.add_indicators(["TRANGE", "MINUS_DM"])
@@ -688,7 +697,7 @@ class Ticker:
         tr_smooth = tr.ewm(alpha=1 / 14, adjust=False).mean()
         dm_smooth = minus_dm.ewm(alpha=1 / 14, adjust=False).mean()
 
-        self.df["MINUS_DI_14"] = 1 * dm_smooth / tr_smooth
+        self.history["MINUS_DI_14"] = 1 * dm_smooth / tr_smooth
 
     # Average Directional Index
     def add_adx_14(self):
@@ -697,30 +706,30 @@ class Ticker:
         minus_di = self.df["MINUS_DI_14"]
 
         dx = 1 * (plus_di - minus_di).abs() / (plus_di + minus_di)
-        self.df["ADX_14"] = dx.ewm(alpha=1 / 14, adjust=False).mean()
+        self.history["ADX_14"] = dx.ewm(alpha=1 / 14, adjust=False).mean()
 
     # Aroon Indicator
     def add_aroon_up(self, period=14):
         rolling_high_idx = (
-            self.df["HIGH"]
+            self.history["HIGH"]
             .rolling(period)
             .apply(
                 lambda x: period - 1 - np.argmax(x),
                 raw=True,
             )
         )
-        self.df["AROON_UP"] = 1 * (period - rolling_high_idx) / period
+        self.history["AROON_UP"] = 1 * (period - rolling_high_idx) / period
 
     def add_aroon_down(self, period=14):
         rolling_low_idx = (
-            self.df["LOW"]
+            self.history["LOW"]
             .rolling(period)
             .apply(
                 lambda x: period - 1 - np.argmin(x),
                 raw=True,
             )
         )
-        self.df["AROON_DOWN"] = 1 * (period - rolling_low_idx) / period
+        self.history["AROON_DOWN"] = 1 * (period - rolling_low_idx) / period
 
     def add_aroon_osc(self):
         self.add_indicators(["AROON_UP", "AROON_DOWN"])
@@ -728,17 +737,17 @@ class Ticker:
 
     # Parabolic SAR
     def add_sar(self, af_step=0.02, af_max=0.2):
-        high = self.df["HIGH"].values
-        low = self.df["LOW"].values
+        high = self.history["HIGH"].values
+        low = self.history["LOW"].values
 
-        sar = np.zeros(len(self.df))
+        sar = np.zeros(len(self.history))
         trend = 1  # 1 = uptrend, -1 = downtrend
         af = af_step
         ep = low[0]
 
         sar[0] = low[0]
 
-        for i in range(1, len(self.df)):
+        for i in range(1, len(self.history)):
             sar[i] = sar[i - 1] + af * (ep - sar[i - 1])
 
             if trend == 1:
@@ -762,4 +771,20 @@ class Ticker:
                     ep = high[i]
                     af = af_step
 
-        self.df["SAR"] = sar
+        self.history["SAR"] = sar
+
+    def add_max(self, window):
+        self.history["MAX:" + str(window)] = self.history["HIGH"].rolling(window=window).max()
+
+    def add_min(self, window):
+        self.history["MIN:" + str(window)] = self.history["LOW"].rolling(window=window).min()
+
+    def add_div_yield(self):
+        annual_dividends = self.history["DIVIDENDS"].rolling(window=252).sum()
+        self.history["DIV_YIELD"] = annual_dividends / self.history["CLOSE"]
+
+    def add_div_growth(self, years=5):
+        annual_div = self.history["DIVIDENDS"].groupby(self.history.index.year).sum()
+        annual_growth = annual_div.pct_change()
+        avg_growth = annual_growth.rolling(window=years).mean()
+        self.history[f"DIV_GROWTH:{years}"] = self.history.index.year.map(avg_growth)
