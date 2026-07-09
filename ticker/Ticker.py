@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -24,51 +25,18 @@ CHART_OVERLAYS = {
     "SAR",
 }
 
-INDICATOR_DEPENDENCIES = {
-    # MACD family
-    "MACD": ["EMA:12", "EMA:26"],
-    "MACD_SIGNAL": ["MACD"],
-    "MACD_HIST": ["MACD", "MACD_SIGNAL"],
-    # Stochastic
-    "STOCH_FASTD": ["STOCH_FASTK"],
-    "STOCH_SLOWK": ["STOCH_FASTK"],
-    "STOCH_SLOWD": ["STOCH_SLOWK"],
-    # Stochastic RSI
-    "STOCHRSI_FASTK": ["RSI:14"],
-    "STOCHRSI_FASTD": ["STOCHRSI_FASTK"],
-    # PPO / APO
-    "PPO": ["EMA:12", "EMA:26"],
-    "APO": ["EMA:12", "EMA:26"],
-    # Volume indicators
-    "ADOSC": ["AD"],
-    # Volatility / price-derived
-    "ATR_14": ["TRANGE"],
-    "NATR_14": ["ATR_14"],
-    # Bollinger Bands
-    "BB_UPPER": ["BB_MIDDLE"],
-    "BB_LOWER": ["BB_MIDDLE"],
-    # Directional Movement (building blocks)
-    "PLUS_DI_14": ["PLUS_DM", "TRANGE"],
-    "MINUS_DI_14": ["MINUS_DM", "TRANGE"],
-    # ADX
-    "ADX_14": ["PLUS_DI_14", "MINUS_DI_14"],
-    # Aroon
-    "AROON_OSC": ["AROON_UP", "AROON_DOWN"],
-}
-
-
 @dataclass
 class Ticker:
     ticker: str
-    name: str = None
-    desc: str = None
+    name: str = ""
+    desc: str = ""
 
-    def __init__(self, ticker, name=None, desc=None):
+    def __init__(self, ticker, name="", desc=""):
         self.yf_ticker = yf.Ticker(ticker)
         self.ticker = ticker
         self.name = name
         self.desc = desc
-        self.df = None
+        self.df: pd.DataFrame = None
 
         self.is_loaded = False
         self.can_load_ticker = True
@@ -169,21 +137,17 @@ class Ticker:
         if not self.is_loaded:
             self.load_history()
 
-        indicator = indicator.upper()
+        ind = indicator.upper()
 
-        build_order = self._resolve_dependencies(indicator)
+        if ind in self.df.columns and not force:
+            return True
 
-        for ind in build_order:
-            if ind in self.df.columns and not force:
-                continue
-
-            try:
-                self.calc_indicator(ind)
-                # print("Calcualted Indicator: ", ind)
-                self.indicator_list.append(ind)
-            except KeyError:
-                raise ValueError(f"No build rule registered for {ind}")
-                return False
+        try:
+            self.calc_indicator(ind)
+            # print("Calcualted Indicator: ", ind)
+            self.indicator_list.append(ind)
+        except KeyError:
+            raise ValueError(f"No build rule registered for {ind}")
 
         return True
 
@@ -197,6 +161,9 @@ class Ticker:
     def dropna(self):
         self.df.dropna()
 
+    def keep(self, columns: List[str]):
+        self.df = self.df.filter(columns)
+
     def _indicator_demux(self, indicator):
         pass
 
@@ -204,6 +171,7 @@ class Ticker:
         ind_split = indicator_name.split(":")
         ind_type = ind_split[0]
 
+        ind_params = []
         if len(ind_split) > 1:
             ind_params = [int(ind_param) for ind_param in ind_split[1].split("_")]
 
@@ -487,12 +455,15 @@ class Ticker:
 
     # Moving Average Convergence Divergence
     def add_macd(self):
+        self.add_indicators(["EMA:12", "EMA:26"])
         self.df["MACD"] = self.df["EMA:12"] - self.df["EMA:26"]
 
     def add_macd_signal(self):
+        self.add_indicator("MACD")
         self.df["MACD_SIGNAL"] = self.df["MACD"].ewm(span=9, adjust=False).mean()
 
     def add_macd_hist(self):
+        self.add_indicators(["MACD", "MACD_SIGNAL"])
         self.df["MACD_HIST"] = self.df["MACD"] - self.df["MACD_SIGNAL"]
 
     # Stochastik Socillator
@@ -502,22 +473,27 @@ class Ticker:
         self.df["STOCH_FASTK"] = 1 * (self.df["CLOSE"] - low) / (high - low)
 
     def add_stoch_fastd(self):
+        self.add_indicator("STOCH_FASTK")
         self.df["STOCH_FASTD"] = self.df["STOCH_FASTK"].rolling(3).mean()
 
     def add_stoch_slowk(self):
+        self.add_indicator("STOCH_FASTK")
         self.df["STOCH_SLOWK"] = self.df["STOCH_FASTK"].rolling(3).mean()
 
     def add_stoch_slowd(self):
+        self.add_indicator("STOCH_SLOWK")
         self.df["STOCH_SLOWD"] = self.df["STOCH_SLOWK"].rolling(3).mean()
 
     # Stochastik RSI
     def add_stochrsi_fastk(self, period=14):
+        self.add_indicator("RSI:14")
         rsi = self.df["RSI:14"]
         min_rsi = rsi.rolling(period).min()
         max_rsi = rsi.rolling(period).max()
         self.df["STOCHRSI_FASTK"] = 1 * (rsi - min_rsi) / (max_rsi - min_rsi)
 
     def add_stochrsi_fastd(self):
+        self.add_indicator("STOCH_FASTK")
         self.df["STOCHRSI_FASTD"] = self.df["STOCHRSI_FASTK"].rolling(3).mean()
 
     # Commodity Channel Index
@@ -547,10 +523,12 @@ class Ticker:
 
     # Percentage Price Oscillator
     def add_ppo(self):
+        self.add_indicators(["EMA:12", "EMA:26"])
         self.df["PPO"] = 1 * (self.df["EMA:12"] - self.df["EMA:26"]) / self.df["EMA:26"]
 
     # Absolute Price Oscillator
     def add_apo(self):
+        self.add_indicators(["EMA:12", "EMA:26"])
         self.df["APO"] = self.df["EMA:12"] - self.df["EMA:26"]
 
     # Balance of Power
@@ -591,6 +569,7 @@ class Ticker:
 
     # Chaikin A/D Oscillator
     def add_adosc(self, fast=3, slow=10):
+        self.add_indicator("ADOSC")
         ad = self.df["AD"]
         ema_fast = ad.ewm(span=fast, adjust=False).mean()
         ema_slow = ad.ewm(span=slow, adjust=False).mean()
@@ -645,11 +624,13 @@ class Ticker:
 
     # Average True Range
     def add_atr_14(self):
+        self.add_indicator("TRANGE")
         tr = self.df["TRANGE"]
         self.df["ATR_14"] = tr.ewm(alpha=1 / 14, adjust=False).mean()
 
     # Normalized ATR
     def add_natr_14(self):
+        self.add_indicator("ATR_14")
         self.df["NATR_14"] = 1 * self.df["ATR_14"] / self.df["CLOSE"]
 
     # Bollinger Bands
@@ -657,10 +638,12 @@ class Ticker:
         self.df["BB_MIDDLE"] = self.df["CLOSE"].rolling(20).mean()
 
     def add_bb_upper(self, std_mult=2):
+        self.add_indicator("BB_MIDDLE")
         std = self.df["CLOSE"].rolling(20).std()
         self.df["BB_UPPER"] = self.df["BB_MIDDLE"] + std_mult * std
 
     def add_bb_lower(self, std_mult=2):
+        self.add_indicator("BB_MIDDLE")
         std = self.df["CLOSE"].rolling(20).std()
         self.df["BB_LOWER"] = self.df["BB_MIDDLE"] - std_mult * std
 
@@ -688,6 +671,7 @@ class Ticker:
         )
 
     def add_plus_di_14(self):
+        self.add_indicators(["TRANGE", "PLUS_DM"])
         tr = self.df["TRANGE"]
         plus_dm = self.df["PLUS_DM"]
 
@@ -697,6 +681,7 @@ class Ticker:
         self.df["PLUS_DI_14"] = 1 * dm_smooth / tr_smooth
 
     def add_minus_di_14(self):
+        self.add_indicators(["TRANGE", "MINUS_DM"])
         tr = self.df["TRANGE"]
         minus_dm = self.df["MINUS_DM"]
 
@@ -707,6 +692,7 @@ class Ticker:
 
     # Average Directional Index
     def add_adx_14(self):
+        self.add_indicators(["PLUS_DI_14", "MINUS_DI_14"])
         plus_di = self.df["PLUS_DI_14"]
         minus_di = self.df["MINUS_DI_14"]
 
@@ -737,6 +723,7 @@ class Ticker:
         self.df["AROON_DOWN"] = 1 * (period - rolling_low_idx) / period
 
     def add_aroon_osc(self):
+        self.add_indicators(["AROON_UP", "AROON_DOWN"])
         self.df["AROON_OSC"] = self.df["AROON_UP"] - self.df["AROON_DOWN"]
 
     # Parabolic SAR

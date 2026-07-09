@@ -1,4 +1,5 @@
 from Simulation import Simulation
+from Analysis import Analysis
 from Strategy import *
 from Ticker import Ticker
 
@@ -21,10 +22,14 @@ tickers = []
 
 
 # tickers.append(Ticker("^SPX"))
-msft = Ticker("MSFT")
-msft.add_indicator("ATR_14")
-tickers.append(msft)
-# tickers = load_tickers_from_file("smp_500_stocks.txt")
+# msft = Ticker("MSFT")
+# msft.add_indicator("ATR_14")
+# tickers.append(msft)
+
+tickers = load_tickers_from_file("smp_500_stocks.txt")
+for ticker in tickers:
+    ticker.add_indicator("ROC:1")
+    ticker.keep(["ROC:1"])
 
 strats.append(BuyAndHold())
 # for short in range(10, 110, 10):
@@ -39,9 +44,14 @@ print("Number of Strats: ", len(strats))
 
 # sim = Simulation(ticker=ticker, strategys=strats)
 sim = Simulation(tickers=tickers, strategys=strats)
+analysis = Analysis()
+corr_mat = analysis.correlation(tickers, "ROC:1", "pearson", 1)
+corr_pairs = analysis.correlated_ticker(corr_mat, 0.75)
+print("Highly Correlated Stock Pairs (> 0.6):")
+print(corr_pairs.sort_values(ascending=False).to_string())
 
 # sim.set_timespan(start="2000-01-01 00:00")
-sim.start(show_progress=True)
-df = sim.get_quick_summary()
-df.to_csv("results.csv")
-sim.plot_results(show_indicators=True, log_scale=False, show_volume=False)
+# sim.start(show_progress=True)
+# df = sim.get_quick_summary()
+# df.to_csv("results.csv")
+# sim.plot_results(show_indicators=True, log_scale=False, show_volume=False)
