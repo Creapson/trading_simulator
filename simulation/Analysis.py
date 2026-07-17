@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import List, Tuple
-from Ticker import Ticker
+from ticker.Ticker import Ticker
 
 from datetime import datetime
 
@@ -13,7 +13,7 @@ class Analysis:
 
         df_list: List[pd.DataFrame] = []
         for ticker in tickers:
-            df = ticker.df
+            df = ticker.history
             df = df.filter([column])
             df.columns = [ticker.ticker]
             df = df[df.index > cutoff_date]

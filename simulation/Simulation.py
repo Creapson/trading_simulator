@@ -4,9 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from Portfolio import Portfolio
-from Strategy import Strategy
-from Ticker import Ticker
+from simulation.Portfolio import Portfolio
+from simulation.Strategy import Strategy
+from ticker.Ticker import Ticker
 
 
 class Simulation:
@@ -243,13 +243,39 @@ class Simulation:
         print(df.to_string())
         return df
 
-    def plot_results(self, show_indicators=False, log_scale=False, show_volume=False):
+    def plot_results(self, chartWindow, show_indicators=False, log_scale=False, show_volume=False):
         df = self.tickers[0].get_history()
+        ticker = self.tickers[0].ticker.ticker
+
+        print(df)
+
+        dates = [t.timestamp() for t in df.index]
+        opens = df['OPEN'].tolist()
+        highs = df['HIGH'].tolist()
+        lows = df['LOW'].tolist()
+        closes = df['CLOSE'].tolist()
+
+        from ticker.Ticker import CHART_OVERLAYS
+
         used_indicators = self.tickers[0].get_indicators()
 
+        chartWindow.plot.add_candlestick_series(
+                ticker, 
+                dates, 
+                opens,
+                closes,
+                lows,
+                highs
+                )
+
+        if show_indicators:
+            for indicator in used_indicators:
+                prefix = indicator.split(":")[0]
+                if prefix in CHART_OVERLAYS:
+                    chartWindow.plot.add_line_series(indicator, dates, df[indicator].tolist())
+        """
         # Determine if we need a secondary plot
         # Logic: If show_indicators is True and there's at least one non-overlay indicator
-        from Ticker import CHART_OVERLAYS
 
         secondary_inds = [
             ind for ind in used_indicators if ind.split(":")[0] not in CHART_OVERLAYS
@@ -319,3 +345,5 @@ class Simulation:
 
         plt.tight_layout()
         plt.show()
+
+        """

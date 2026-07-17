@@ -142,7 +142,7 @@ class Ticker:
 
         ind = indicator.upper()
 
-        if ind in self.df.columns and not force:
+        if ind in self.history.columns and not force:
             return True
 
         try:

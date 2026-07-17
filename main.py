@@ -1,7 +1,12 @@
-from Simulation import Simulation
-from Analysis import Analysis
-from Strategy import *
-from Ticker import Ticker
+from gui.windows import PriceChartWindow
+from simulation.Simulation import Simulation
+from simulation.Analysis import Analysis
+from simulation.Strategy import *
+from ticker.Ticker import Ticker
+
+from gui.windows.PriceChartWindow import PriceChartWindow
+
+import dearpygui.dearpygui as dpg
 
 
 def load_tickers_from_file(filename, max_num=99999):
@@ -20,8 +25,8 @@ def load_tickers_from_file(filename, max_num=99999):
 strats = []
 tickers = []
 
-msft = Ticker("RY6.SG")
-msft.add_indicators(["DIV_YIELD", "DIV_GROWTH:5"])
+msft = Ticker("MSFT")
+msft.add_indicators(["EMA:12", "EMA:24"])
 tickers.append(msft)
 # tickers = load_tickers_from_file("smp_500_stocks.txt")
 # strats.append(RSI_Breakout())
@@ -55,14 +60,26 @@ print("Number of Strats: ", len(strats))
 
 # sim = Simulation(ticker=ticker, strategys=strats)
 sim = Simulation(tickers=tickers, strategys=strats)
-analysis = Analysis()
-corr_mat = analysis.correlation(tickers, "ROC:1", "pearson", 1)
-corr_pairs = analysis.correlated_ticker(corr_mat, 0.75)
+# analysis = Analysis()
+# corr_mat = analysis.correlation(tickers, "ROC:1", "pearson", 1)
+# corr_pairs = analysis.correlated_ticker(corr_mat, 0.75)
 print("Highly Correlated Stock Pairs (> 0.6):")
-print(corr_pairs.sort_values(ascending=False).to_string())
+# print(corr_pairs.sort_values(ascending=False).to_string())
 
 # sim.set_timespan(start="2000-01-01 00:00")
 # sim.start(show_progress=True)
 # df = sim.get_quick_summary()
 # df.to_csv("results.csv")
-# sim.plot_results(show_indicators=True, log_scale=False, show_volume=False)
+
+# 3. Setup Dear PyGui
+dpg.create_context()
+
+chartWindow = PriceChartWindow()
+chartWindow.setup()
+sim.plot_results(chartWindow=chartWindow, show_indicators=True, log_scale=False, show_volume=False)
+# 4. Render the UI
+dpg.create_viewport(title='YFinance + Dear PyGui', width=850, height=550)
+dpg.setup_dearpygui()
+dpg.show_viewport()
+dpg.start_dearpygui()
+dpg.destroy_context()
