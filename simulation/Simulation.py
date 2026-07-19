@@ -254,25 +254,42 @@ class Simulation:
         highs = df['HIGH'].tolist()
         lows = df['LOW'].tolist()
         closes = df['CLOSE'].tolist()
+        volumes = df["VOLUME"].tolist()
 
         from ticker.Ticker import CHART_OVERLAYS
 
         used_indicators = self.tickers[0].get_indicators()
 
+        # add price data
         chartWindow.plot.add_candlestick_series(
                 ticker, 
                 dates, 
                 opens,
                 closes,
                 lows,
-                highs
+                highs,
+                chartWindow.price_axis
+                )
+
+        # add volume data
+        chartWindow.plot.add_bar_series(
+                "Volume",
+                dates,
+                volumes,
+                chartWindow.volume_axis
                 )
 
         if show_indicators:
             for indicator in used_indicators:
                 prefix = indicator.split(":")[0]
                 if prefix in CHART_OVERLAYS:
-                    chartWindow.plot.add_line_series(indicator, dates, df[indicator].tolist())
+                    chartWindow.plot.add_line_series(
+                            indicator, 
+                            dates, 
+                            df[indicator].tolist(),
+                            chartWindow.price_axis
+
+                    )
         """
         # Determine if we need a secondary plot
         # Logic: If show_indicators is True and there's at least one non-overlay indicator

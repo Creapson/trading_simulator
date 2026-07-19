@@ -1,7 +1,4 @@
 import dearpygui.dearpygui as dpg
-from typing import List
-from tkinter import filedialog
-
 
 class Window:
     def __init__(self, title : str="Not Defined", width:int=800, height:int=600, autosize:bool=True, no_resize:bool=False):
