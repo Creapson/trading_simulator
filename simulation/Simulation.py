@@ -279,8 +279,11 @@ class Simulation:
                 chartWindow.volume_axis
                 )
 
+        primary_inds = [ind for ind in used_indicators if ind.split(":")[0] in CHART_OVERLAYS]
+        secondary_inds = [ind for ind in used_indicators if ind.split(":")[0] not in CHART_OVERLAYS]
+
         if show_indicators:
-            for indicator in used_indicators:
+            for indicator in primary_inds:
                 prefix = indicator.split(":")[0]
                 if prefix in CHART_OVERLAYS:
                     chartWindow.plot.add_line_series(

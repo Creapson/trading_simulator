@@ -25,7 +25,7 @@ def load_tickers_from_file(filename, max_num=99999):
 strats = []
 tickers = []
 
-msft = Ticker("MSFT")
+msft = Ticker("AAPL")
 msft.add_indicators(["EMA:12", "EMA:24"])
 tickers.append(msft)
 # tickers = load_tickers_from_file("smp_500_stocks.txt")
@@ -81,5 +81,6 @@ sim.plot_results(chartWindow=chartWindow, show_indicators=True, log_scale=False,
 dpg.create_viewport(title='YFinance + Dear PyGui', width=850, height=550)
 dpg.setup_dearpygui()
 dpg.show_viewport()
+dpg.set_primary_window(chartWindow.id, True)
 dpg.start_dearpygui()
 dpg.destroy_context()

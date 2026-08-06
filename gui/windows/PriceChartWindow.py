@@ -13,11 +13,21 @@ class PriceChartWindow(Window):
         self.price_axis = 0
         self.volume_axis = 0
         self.date_axis = 0
+        self.prim_plot = 0
+        self.sec_plot = 0
         super().__init__(title, width, height, autosize, no_resize)
 
     def build(self):
-        self.plot.setup()
-        self.date_axis = self.plot.add_x_axis("Date")
-        self.price_axis = self.plot.add_y_axis("Price USD")
-        self.volume_axis = self.plot.add_y_axis("Volume")
+        self.plot.setup(1, 2)
+        self.prim_plot = self.plot.plot_ids[0]
+        self.prim_plot = self.plot.plot_ids[1]
+
+        # primary plot
+        self.date_axis = self.plot.add_x_axis("Date", parent=self.prim_plot)
+        self.price_axis = self.plot.add_y_axis("Price USD", parent=self.prim_plot)
+        self.volume_axis = self.plot.add_y_axis(label="Volume", min_limit=0, lock_min=True, parent=self.prim_plot)
+        # secoundary plot
+        self.occilator_axis = self.plot.add_y_axis(label="Value", parent=self.sec_plot)
+        self.occilator_axis = self.plot.add_x_axis(label="Date", parent=self.sec_plot)
+        self.plot.show_legend()
         super().build()

@@ -5,7 +5,8 @@ from pydantic import BaseModel, Field
 class Plot(BaseModel):
     label: str
 
-    plot_id: int = Field(default=0, exclude=True) 
+    plot_ids: list[int] = Field(default=0, exclude=True) 
+    subplot_id: int =Field(default=0, exclude=True) 
     x_axis_ids: list[int | str] = Field(default_factory=list, exclude=True)
     y_axis_ids: list[int | str] = Field(default_factory=list, exclude=True)
 
@@ -22,24 +23,50 @@ class Plot(BaseModel):
                 print("Cant apply setting: ", setting)
         pass
 
-    def setup(self):
+    def show_legend(self):
+        dpg.add_plot_legend(parent=self.plot_id)
+
+    def setup(
+            self, 
+            cols:int=1, 
+            rows:int=1,
+            plot_labels:list[str]=[],
+              ):
         self.plot_id = int(dpg.generate_uuid())
 
         with dpg.tree_node(label="Settings"):
             dpg.add_button(label="fit_view", callback=self.fit_view)
 
-        dpg.add_plot(
-                label=self.label, 
-                tag=self.plot_id,
-                width=-1,
-                height=-1
-        )
+        if rows == cols == 1:
+            dpg.add_plot(
+                    label=self.label, 
+                    tag=self.subplot_id,
+                    width=-1,
+                    height=-1
+            )
+        else:
+            with dpg.subplots(rows=rows, columns=cols) as self.subplot_id:
+                for col in range(cols):
+                    for row in range(rows):
+                        label:str = "None"
+                        try:
+                            label = plot_labels[(col*rows)+row]
+                        except IndexError:
+                            label = "None"
+
+                        self.plot_ids[(col*rows)+row] = dpg.add_plot(
+                                width=-1, 
+                                height=-1,
+                                label=label,
+                        )
 
     def add_x_axis(
             self, 
             label, 
             tag=None,
+            parent=None,
             ):
+        if parent is None: parent = self.subplot_id
         if tag is None:
             tag = dpg.generate_uuid()
         else:
@@ -48,7 +75,7 @@ class Plot(BaseModel):
                 dpg.mvXAxis,
                 label=label,
                 scale=dpg.mvPlotScale_Linear,
-                parent=self.plot_id,
+                parent=parent,
                 tag=tag
                 )
         self.x_axis_ids.append(axis_id)
@@ -58,7 +85,14 @@ class Plot(BaseModel):
             self, 
             label, 
             tag=None,
-                   ):
+            min_limit=float("-inf"),
+            max_limit=float("inf"),
+            lock_min=False,
+            lock_max=False,
+            parent=None,
+            ):
+        if parent is None: parent = self.subplot_id
+
         if tag is None:
             tag = dpg.generate_uuid()
         else:
@@ -67,11 +101,14 @@ class Plot(BaseModel):
                 dpg.mvYAxis, 
                 label=label,
                 scale=dpg.mvPlotScale_Linear,
-                parent=self.plot_id,
-                tag=tag
+                parent=parent,
+                tag=tag,
+                lock_max=lock_max,
+                lock_min=lock_min,
                 )
         dpg.set_axis_limits_auto(axis_id)
         self.y_axis_ids.append(axis_id)
+        dpg.set_axis_limits_constraints(axis_id, min_limit, max_limit)
         return axis_id
 
     def remove_x_axis(self, tag):
@@ -83,7 +120,7 @@ class Plot(BaseModel):
         dpg.delete_item(self.uuid(tag))
 
     def clear_plot(self):
-        dpg.delete_item(self.y_axis_id, children_only=True)
+        dpg.delete_item(self.y_axis_ids, children_only=True)
 
     def fit_view(self):
         dpg.fit_axis_data(self.x_axis_ids[0])
