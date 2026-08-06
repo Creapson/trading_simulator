@@ -5,13 +5,13 @@ from pydantic import BaseModel, Field
 class Plot(BaseModel):
     label: str
 
-    plot_ids: list[int] = Field(default=0, exclude=True) 
+    plot_ids: dict[int, int] = Field(default_factory=dict, exclude=True)
     subplot_id: int =Field(default=0, exclude=True) 
     x_axis_ids: list[int | str] = Field(default_factory=list, exclude=True)
     y_axis_ids: list[int | str] = Field(default_factory=list, exclude=True)
 
     def uuid(self, text: str) -> str:
-        return str(self.plot_id) + "_" + text
+        return str(self.subplot_id) + "_" + text
 
     def apply_settings(self, sender, app_data, user_data):
         widget_id, setting = user_data
@@ -23,16 +23,18 @@ class Plot(BaseModel):
                 print("Cant apply setting: ", setting)
         pass
 
-    def show_legend(self):
-        dpg.add_plot_legend(parent=self.plot_id)
+    def show_legend(self, plot_id):
+        dpg.add_plot_legend(parent=plot_id)
 
     def setup(
             self, 
             cols:int=1, 
             rows:int=1,
             plot_labels:list[str]=[],
+            row_ratios=[],
+            col_ratios=[]
               ):
-        self.plot_id = int(dpg.generate_uuid())
+        self.subplot_id = int(dpg.generate_uuid())
 
         with dpg.tree_node(label="Settings"):
             dpg.add_button(label="fit_view", callback=self.fit_view)
@@ -45,19 +47,21 @@ class Plot(BaseModel):
                     height=-1
             )
         else:
-            with dpg.subplots(rows=rows, columns=cols) as self.subplot_id:
-                for col in range(cols):
-                    for row in range(rows):
-                        label:str = "None"
+            with dpg.subplots(rows=rows, columns=cols, width=-1, height=-1, row_ratios=row_ratios, column_ratios=col_ratios) as self.subplot_id:
+                for row in range(rows):
+                    for col in range(cols):
+                        idx = (row * cols) + col  # Note: multiplied by cols, not rows
+                        
+                        label: str = "None"
                         try:
-                            label = plot_labels[(col*rows)+row]
+                            label = plot_labels[idx]
                         except IndexError:
                             label = "None"
 
-                        self.plot_ids[(col*rows)+row] = dpg.add_plot(
-                                width=-1, 
-                                height=-1,
-                                label=label,
+                        self.plot_ids[idx] = dpg.add_plot(
+                            width=-1, 
+                            height=-1,
+                            label=label,
                         )
 
     def add_x_axis(
@@ -66,7 +70,7 @@ class Plot(BaseModel):
             tag=None,
             parent=None,
             ):
-        if parent is None: parent = self.subplot_id
+        if parent is None: parent = self.plot_ids[0]
         if tag is None:
             tag = dpg.generate_uuid()
         else:
@@ -91,7 +95,7 @@ class Plot(BaseModel):
             lock_max=False,
             parent=None,
             ):
-        if parent is None: parent = self.subplot_id
+        if parent is None: parent = self.plot_ids[0]
 
         if tag is None:
             tag = dpg.generate_uuid()
@@ -125,6 +129,9 @@ class Plot(BaseModel):
     def fit_view(self):
         dpg.fit_axis_data(self.x_axis_ids[0])
         dpg.fit_axis_data(self.y_axis_ids[0])
+
+    def link_all_x(self, should_link=True):
+        dpg.configure_item(self.subplot_id, link_all_x=should_link)
 
     def add_line_series(
             self, 

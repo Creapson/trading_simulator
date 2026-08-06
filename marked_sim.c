@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define MAX_PRICE (1 << 20)             // 1_048_576
+#define MAX_PRICE (1 << 20)           // 1_048_576
 #define PAGE_SHIFT 10
-#define PAGE_SIZE  (1 << PAGE_SHIFT)    // 1_024
+#define PAGE_SIZE  (1 << PAGE_SHIFT)  // 1_024
 #define NUM_PAGES  ((MAX_PRICE + PAGE_SIZE - 1) / PAGE_SIZE)
 
 #define MAX_ORDERS 1000
@@ -21,7 +21,7 @@ typedef enum {
     TYPE_MARKET = 1,
 } OrderType;
 
-typedef struct{
+typedef struct {
     uint64_t price;
     uint64_t quantity;
     Side side;
@@ -43,6 +43,15 @@ typedef struct {
     uint32_t best_bid;
 } OrderBook;
 
+typedef struct {
+    uint64_t open;
+    uint64_t high;
+    uint64_t low;
+    uint64_t close;
+    uint64_t volume;
+    bool has_trades;
+} OHLCVBar;
+
 static inline uint64_t sparse_get(const SparseArray* sa, uint64_t price) {
     if (price >= MAX_PRICE) return 0;
     uint32_t page_idx = price >> PAGE_SHIFT;
@@ -52,20 +61,17 @@ static inline uint64_t sparse_get(const SparseArray* sa, uint64_t price) {
     return sa->pages[page_idx][offset];
 }
 
-// Add/Set volume at price level (allocates page dynamically if missing)
 static inline void sparse_add(SparseArray* sa, uint64_t price, uint64_t delta) {
     if (price >= MAX_PRICE) return;
     uint32_t page_idx = price >> PAGE_SHIFT;
     uint32_t offset   = price & (PAGE_SIZE - 1);
 
     if (!sa->pages[page_idx]) {
-        // Allocate page using calloc so volume values start at 0
         sa->pages[page_idx] = (uint64_t*)calloc(PAGE_SIZE, sizeof(uint64_t));
     }
     sa->pages[page_idx][offset] += delta;
 }
 
-// Subtract volume at price level
 static inline void sparse_sub(SparseArray* sa, uint64_t price, uint64_t delta) {
     if (price >= MAX_PRICE) return;
     uint32_t page_idx = price >> PAGE_SHIFT;
@@ -76,36 +82,45 @@ static inline void sparse_sub(SparseArray* sa, uint64_t price, uint64_t delta) {
     }
 }
 
-static inline void sync_best_prices(OrderBook* book, Side match_side) {
-    if (match_side == SIDE_BID) { // We matched against asks, advance best_ask upward
-        while (book->best_ask < MAX_PRICE && sparse_get(&book->asks, book->best_ask) == 0) {
-            book->best_ask++;
-        }
-    } else { // We matched against bids, advance best_bid downward
-        while (book->best_bid > 0 && sparse_get(&book->bids, book->best_bid) == 0) {
-            book->best_bid--;
-        }
+static inline void sync_best_prices(OrderBook* book) {
+    while (book->best_ask < MAX_PRICE && sparse_get(&book->asks, book->best_ask) == 0) {
+        book->best_ask++;
+    }
+    while (book->best_bid > 0 && sparse_get(&book->bids, book->best_bid) == 0) {
+        book->best_bid--;
     }
 }
 
-void process_orders(OrderBook* book) {
+void record_trade(OHLCVBar* bar, uint64_t price, uint64_t qty) {
+    if (!bar->has_trades) {
+        bar->open = price;
+        bar->high = price;
+        bar->low = price;
+        bar->close = price;
+        bar->volume = qty;
+        bar->has_trades = true;
+    } else {
+        if (price > bar->high) bar->high = price;
+        if (price < bar->low)  bar->low = price;
+        bar->close = price;
+        bar->volume += qty;
+    }
+}
+
+void process_orders(OrderBook* book, OHLCVBar* current_bar) {
     for (int i = 0; i < book->num_orders; i++) {
         Order order = book->orders[i];
-
-        if (order.price >= MAX_PRICE) continue;
+        if (order.price >= MAX_PRICE && order.type == TYPE_LIMIT) continue;
 
         SparseArray* match_levels = (order.side == SIDE_BID) ? &book->asks : &book->bids;
         SparseArray* own_levels   = (order.side == SIDE_BID) ? &book->bids : &book->asks;
 
         uint64_t remaining = order.quantity;
-
         uint64_t price = (order.side == SIDE_BID) ? book->best_ask : book->best_bid;
         int step = (order.side == SIDE_BID) ? 1 : -1;
 
-        // try finding offers
         while (remaining > 0) {
-            // Bounds check
-            if (price < 0 || price >= MAX_PRICE) break;
+            if (price == 0 || price >= MAX_PRICE) break;
 
             if (order.type == TYPE_LIMIT) {
                 if (order.side == SIDE_BID && price > order.price) break;
@@ -115,24 +130,16 @@ void process_orders(OrderBook* book) {
             uint64_t available = sparse_get(match_levels, price);
 
             if (available > 0) {
-                if (available >= remaining) {
-                    sparse_sub(match_levels, price, remaining);
-                    remaining = 0;
-                    // If level fully cleared, adjust top pointer
-                if (available == remaining) {
-                        sync_best_prices(book, order.side);
-                    }
-                    break;
-                } else {
-                    remaining -= available;
-                    sparse_sub(match_levels, price, available);
-                    sync_best_prices(book, order.side);
-                }
+                uint64_t fill = (available >= remaining) ? remaining : available;
+                sparse_sub(match_levels, price, fill);
+                remaining -= fill;
+
+                // Record execution price and matched quantity into the active candle
+                record_trade(current_bar, price, fill);
             }
             price += step;
         }
 
-        // when no offers are found add them to the book
         if (order.type == TYPE_LIMIT && remaining > 0) {
             sparse_add(own_levels, order.price, remaining);
 
@@ -146,6 +153,7 @@ void process_orders(OrderBook* book) {
                 }
             }
         }
+        sync_best_prices(book);
     }
     book->num_orders = 0;
 }
@@ -157,21 +165,11 @@ void enqueue_order(OrderBook* book, Order order) {
 }
 
 Order create_limit_order(uint64_t price, uint64_t quantity, Side side) {
-    Order order;
-    order.price = price;
-    order.quantity = quantity;
-    order.side = side;
-    order.type = TYPE_LIMIT;
-    return order;
+    return (Order){ .price = price, .quantity = quantity, .side = side, .type = TYPE_LIMIT };
 }
 
-Order create_marked_order(uint64_t quantity, Side side) {
-    Order order;
-    order.price = 0;
-    order.quantity = quantity;
-    order.side = side;
-    order.type = TYPE_MARKET;
-    return order;
+Order create_market_order(uint64_t quantity, Side side) {
+    return (Order){ .price = 0, .quantity = quantity, .side = side, .type = TYPE_MARKET };
 }
 
 
@@ -210,55 +208,70 @@ void print_order_book(const OrderBook* book, uint32_t range) {
 
     printf("=========================================\n\n");
 }
-
 void add_random_order(OrderBook* book) {
     Side side = (rand() % 2 == 0) ? SIDE_BID : SIDE_ASK;
     
-    // 85% Limit Orders, 15% Market Orders (Realistic liquidity provision)
-    bool is_limit = (rand() % 100) < 85; 
-
-    uint64_t quantity = (rand() % 10) + 1; // 1 to 10 units
+    // 70% Limit, 30% Market Orders to promote trade matches for volume
+    bool is_limit = (rand() % 100) < 70; 
+    uint64_t quantity = (rand() % 15) + 1;
 
     if (!is_limit) {
-        enqueue_order(book, create_marked_order(quantity, side));
+        enqueue_order(book, create_market_order(quantity, side));
         return;
     }
 
-    // Mid price base
     uint64_t mid_price = (book->best_ask + book->best_bid) / 2;
     if (mid_price == 0 || mid_price >= MAX_PRICE) mid_price = 1000;
 
-    // Price offset: +/- 2% around the mid price
-    int offset = (rand() % 40) - 20; // -20 to +20 ticks
+    int offset = (rand() % 20) - 10; // Tight spread (-10 to +10)
     uint64_t price = mid_price + offset;
 
     enqueue_order(book, create_limit_order(price, quantity, side));
-};
+}
 
 int main() {
     OrderBook book;
     memset(&book, 0, sizeof(OrderBook));
     book.best_bid = 0;
-    book.best_ask = MAX_PRICE; // Essential!
+    book.best_ask = MAX_PRICE;
 
-    // 1. Initial Limit Orders
-    enqueue_order(&book, create_limit_order(995, 40, SIDE_BID));
-    enqueue_order(&book, create_limit_order(990, 20, SIDE_BID));
-    enqueue_order(&book, create_limit_order(980, 4, SIDE_BID));
+    // Initial Depth Setup
+    enqueue_order(&book, create_limit_order(995, 100, SIDE_BID));
+    enqueue_order(&book, create_limit_order(990, 100, SIDE_BID));
+    enqueue_order(&book, create_limit_order(1000, 100, SIDE_ASK));
+    enqueue_order(&book, create_limit_order(1005, 100, SIDE_ASK));
 
-    enqueue_order(&book, create_limit_order(1000, 10, SIDE_ASK));
-    enqueue_order(&book, create_limit_order(1010, 5, SIDE_ASK));
-    enqueue_order(&book, create_limit_order(1050, 20, SIDE_ASK));
+    OHLCVBar init_dummy = {0};
+    process_orders(&book, &init_dummy);
 
-    process_orders(&book);
-    print_order_book(&book, 60);
+    int total_bars = 5;
+    int orders_per_bar = 50;
 
-    for (int i = 0; i < 1000; i++) {
-        add_random_order(&book);
+    printf("=========================================================\n");
+    printf(" Bar |    Open |    High |     Low |   Close |   Volume  \n");
+    printf("=========================================================\n");
+
+    for (int bar_idx = 1; bar_idx <= total_bars; bar_idx++) {
+        OHLCVBar bar = {0};
+
+        for (int i = 0; i < orders_per_bar; i++) {
+            add_random_order(&book);
+            process_orders(&book, &bar);
+        }
+
+        if (bar.has_trades) {
+            printf(" %3d | %7llu | %7llu | %7llu | %7llu | %8llu\n",
+                bar_idx,
+                (unsigned long long)bar.open,
+                (unsigned long long)bar.high,
+                (unsigned long long)bar.low,
+                (unsigned long long)bar.close,
+                (unsigned long long)bar.volume);
+        } else {
+            printf(" %3d |   NO TRADES EXECUTED THIS PERIOD\n", bar_idx);
+        }
     }
-
-    process_orders(&book);
-    print_order_book(&book, 60);
+    printf("=========================================================\n");
 
     return 0;
 }

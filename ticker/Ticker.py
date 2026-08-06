@@ -89,8 +89,9 @@ class Ticker:
             )
             print(f"Loaded Ticker {self.name} from file!")
             return True
-        except Exception:
+        except Exception as e:
             print(f"Failed to read {self.name} from file!")
+            print(e);
             return False
 
     def history_from_yf(self):

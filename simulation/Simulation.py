@@ -139,7 +139,7 @@ class Simulation:
 
         open_prices = df["OPEN"].to_numpy()
         close_prices = df["CLOSE"].to_numpy()
-        dividends = df["DIVIDENDS"].to_numpy()
+        # dividends = df["DIVIDENDS"].to_numpy()
         dates = df.index
 
         portfolio = Portfolio(cash=close_prices[0])
@@ -156,7 +156,7 @@ class Simulation:
                 portfolio.close_position(ticker.name, open_prices[i], dates[i])
                 portfolio.short_stock(ticker.name, open_prices[i], dates[i])
 
-            portfolio.add_dividend(ticker.name, dividends[i])
+            # portfolio.add_dividend(ticker.name, dividends[i])
 
             portfolio_value = portfolio.get_value(ticker.name, close_prices[i])
             values.append(portfolio_value)
@@ -177,7 +177,10 @@ class Simulation:
     ):
         if result.empty or len(result) < 2:
             return 0
-        total_days = (result.index.max() - result.index.min()).days
+        try:
+            total_days = (result.index.max() - result.index.min()).days
+        except:
+            total_days = 10000
         num_years = total_days / 365.25
 
         start_price = result["Value"].iloc[0]
@@ -249,7 +252,8 @@ class Simulation:
 
         print(df)
 
-        dates = [t.timestamp() for t in df.index]
+        # dates = [t.timestamp() for t in df.index]
+        dates = df.index.tolist()
         opens = df['OPEN'].tolist()
         highs = df['HIGH'].tolist()
         lows = df['LOW'].tolist()
@@ -291,8 +295,18 @@ class Simulation:
                             dates, 
                             df[indicator].tolist(),
                             chartWindow.price_axis
-
                     )
+
+
+        # plot results
+        for i, (result, strat_name, ticker) in enumerate(self.results):
+            chartWindow.plot.add_line_series(
+                    strat_name, 
+                    dates, 
+                    result["Value"].tolist(),
+                    chartWindow.price_axis
+            )
+
         """
         # Determine if we need a secondary plot
         # Logic: If show_indicators is True and there's at least one non-overlay indicator
