@@ -285,17 +285,26 @@ class Simulation:
 
         primary_inds = [ind for ind in used_indicators if ind.split(":")[0] in CHART_OVERLAYS]
         secondary_inds = [ind for ind in used_indicators if ind.split(":")[0] not in CHART_OVERLAYS]
+        print(primary_inds)
+        print(secondary_inds)
 
         if show_indicators:
             for indicator in primary_inds:
-                prefix = indicator.split(":")[0]
-                if prefix in CHART_OVERLAYS:
-                    chartWindow.plot.add_line_series(
-                            indicator, 
-                            dates, 
-                            df[indicator].tolist(),
-                            chartWindow.price_axis
-                    )
+                chartWindow.plot.add_line_series(
+                        indicator, 
+                        dates, 
+                        df[indicator].tolist(),
+                        chartWindow.price_axis
+                )
+
+        if show_indicators:
+            for indicator in secondary_inds:
+                chartWindow.plot.add_line_series(
+                        indicator, 
+                        dates, 
+                        df[indicator].tolist(),
+                        chartWindow.occilator_axis
+                )
 
 
         # plot results

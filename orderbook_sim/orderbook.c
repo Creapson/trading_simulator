@@ -140,16 +140,53 @@ Order create_market_order(uint64_t quantity, Side side) {
     return (Order){ .price = 0, .quantity = quantity, .side = side, .type = TYPE_MARKET };
 }
 
+void print_order_book(const OrderBook* book, uint32_t range) {
+    uint64_t center = (book->best_ask + book->best_bid) / 2;
+    uint64_t start_price = (center > range) ? (center - range) : 0;
+    uint64_t end_price   = (center + range < MAX_PRICE) ? (center + range) : (MAX_PRICE - 1);
+
+    printf("\n=========================================\n");
+    printf("         ORDER BOOK (b_ask: %u b_bid: %u)        \n", book->best_ask, book->best_bid);
+    printf("=========================================\n");
+    printf("   Price   |   Ask Vol   |   Bid Vol    \n");
+    printf("-----------------------------------------\n");
+
+    bool found_asks = false;
+    for (int64_t p = (int64_t)end_price; p > (int64_t)center; p--) {
+        uint64_t vol = book->asks[p];
+        if (vol > 0) {
+            printf("  $%6lld | %11llu |               \n", (long long)p, (unsigned long long)vol);
+            found_asks = true;
+        }
+    }
+    if (!found_asks) printf("  [ No Asks in range ]                  \n");
+
+    printf("---------- MID PRICE LEVEL %4llu ----------\n", (unsigned long long)center);
+
+    bool found_bids = false;
+    for (int64_t p = (int64_t)center; p >= (int64_t)start_price; p--) {
+        uint64_t vol = book->bids[p];
+        if (vol > 0) {
+            printf("  $%6lld |               | %11llu  \n", (long long)p, (unsigned long long)vol);
+            found_bids = true;
+        }
+    }
+    if (!found_bids) printf("  [ No Bids in range ]                  \n");
+
+    printf("=========================================\n\n");
+}
+
 
 void add_random_order(OrderBook* book, uint64_t last_traded_price) {
     Side side = (rand() % 2 == 0) ? SIDE_BID : SIDE_ASK;
 
-    double yoy_growth = 0.07;
+    double yoy_growth = 0.10;
     int trading_days_per_year = 252;
 
     // 80% Limit Orders, 20% Market Orders
-    bool is_limit = (rand() % 100) < 20; 
+    bool is_limit = (rand() % 100) < 30; 
     uint64_t quantity = (rand() % 50) + 1;
+    if (is_limit) quantity *= 2;
 
     if (!is_limit) {
         enqueue_order(book, create_market_order(quantity, side));
@@ -161,7 +198,9 @@ void add_random_order(OrderBook* book, uint64_t last_traded_price) {
         price = (book->best_ask + book->best_bid) / 2.0;
     }
 
-    double y = (((double)rand() / RAND_MAX) * 0.02) + 1;
+    double y = (((double)rand() / RAND_MAX) * 0.005);
+    if (is_limit) y *= 2;
+    y += 1;
     bool is_pos = (rand() % 2 == 1);
 
     if (is_pos) {price *= (y + yoy_growth/trading_days_per_year);}
@@ -210,11 +249,12 @@ int main() {
     for (int bar_idx = 1; bar_idx <= total_bars; bar_idx++) {
         OHLCVBar bar = {0};
 
-        int orders_per_bar = rand() % 100 + 10;
+        int orders_per_bar = rand() % 20 + 5;
         for (int i = 0; i < orders_per_bar; i++) {
             add_random_order(&book, last_price);
-            process_orders(&book, &bar);
         }
+        process_orders(&book, &bar);
+        // print_order_book(&book, 5000);
 
         if (bar.has_trades) {
             last_price = bar.close;
@@ -232,6 +272,8 @@ int main() {
     // Close File Handle
     fclose(csv_file);
     printf("Successfully wrote %d bars to ohlcv_data.csv\n", total_bars);
+    print_order_book(&book, 5000);
+
 
     return 0;
 }

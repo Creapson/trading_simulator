@@ -26,12 +26,14 @@ strats = []
 tickers = []
 
 msft = Ticker("SIMULATION")
-msft.add_indicators(["EMA:12", "EMA:24"])
+msft.add_indicators(["RSI:21", "EMA:24"])
 tickers.append(msft)
 # tickers = load_tickers_from_file("smp_500_stocks.txt")
 # strats.append(RSI_Breakout())
 
 strats.append(HoldAndReinvest())
+strats.append(RSI_Breakout(14, 0.5, 0.95))
+strats.append(MOM_ZeroCrossing(1))
 strats.append(SMA_Cross(10, 110))
 
 print("Number of Strats: ", len(strats))
@@ -46,8 +48,8 @@ print("Highly Correlated Stock Pairs (> 0.6):")
 
 # sim.set_timespan(start="2000-01-01 00:00")
 sim.start(show_progress=False)
-# df = sim.get_quick_summary()
-# df.to_csv("results.csv")
+df = sim.get_quick_summary()
+df.to_csv("results.csv")
 
 # 3. Setup Dear PyGui
 dpg.create_context()
